@@ -36,7 +36,7 @@ Design and implementation: Lauren Coombe
 ## Citing ntSynt
 If you use ntSynt in your work, please cite:
 
-Lauren Coombe, Parham Kazemi, Johnathan Wong, Inanc Birol, René L. Warren. Multi-genome synteny detection using minimizer graph mappings. bioRxiv (2024) https://doi.org/10.1101/2024.02.07.579356.
+Lauren Coombe, Parham Kazemi, Johnathan Wong, Inanc Birol, René L. Warren. 2025. multi-genome synteny detection using minimizer graph mappings. BMC Biology. 23:367. https://doi.org/10.1186/s12915-025-02455-w
 
 ## Usage
 
