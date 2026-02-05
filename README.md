@@ -36,7 +36,7 @@ Design and implementation: Lauren Coombe
 ## Citing ntSynt
 If you use ntSynt in your work, please cite:
 
-Lauren Coombe, Parham Kazemi, Johnathan Wong, Inanc Birol, René L. Warren. 2025. multi-genome synteny detection using minimizer graph mappings. BMC Biology. 23:367. https://doi.org/10.1186/s12915-025-02455-w
+Lauren Coombe, Parham Kazemi, Johnathan Wong, Inanc Birol, René L. Warren. 2025. ntSynt: multi-genome synteny detection using minimizer graph mappings. BMC Biology. 23:367. https://doi.org/10.1186/s12915-025-02455-w
 
 ## Usage
 
@@ -106,7 +106,7 @@ conda install -c bioconda -c conda-forge ntsynt
   - [intervaltree](https://github.com/chaimleib/intervaltree)
   - [pybedtools](https://daler.github.io/pybedtools/)
   - [ncls](https://github.com/pyranges/ncls)
-  - [python-igraph <v1.0.0](https://python.igraph.org/en/stable/)
+  - [python-igraph](https://python.igraph.org/en/stable/)
 - GCC 6+ or Clang 5+ (with OpenMP and C++17 support)
 - [btllib v1.6.2+](https://github.com/bcgsc/btllib)
 - [meson](https://mesonbuild.com/)
