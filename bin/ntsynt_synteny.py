@@ -18,6 +18,7 @@ import btllib
 import ncls
 import ntjoin_utils
 import ntjoin
+import igraph as ig
 from synteny_block import SyntenyBlock
 
 
@@ -570,6 +571,10 @@ class NtSyntSynteny(ntjoin.Ntjoin):
         print(datetime.datetime.today(), ": Running graph simplificaton", file=sys.stdout, flush=True)
         max_edge_weight = sum(self.weights.values())
         to_remove_nodes = []
+
+        # get_all_simple_paths API changed in igraph 1.0.0, account for that here
+        max_path_len = {"cutoff": 2} if ig.__version__ < "1.0.0" else {"maxlen": 2}
+
         for edge in graph.es():
             source, target = edge.source, edge.target
             # They are potentially simple bubble-like structures, with anchors on either side,
@@ -578,7 +583,7 @@ class NtSyntSynteny(ntjoin.Ntjoin):
                 graph.vs()[target].degree() == 3 and \
                 self.node_partially_anchored(graph, source, max_edge_weight) and \
                 self.node_partially_anchored(graph, target, max_edge_weight):
-                paths = graph.get_all_simple_paths(source, target, cutoff=2)
+                paths = graph.get_all_simple_paths(source, target, **max_path_len)
                 if len(paths) == 2: # Found the one with this edge plus one more which is 3 nodes long
                     for path in paths:
                         if len(path) == 3: # This is the one with the node we want to get rid of

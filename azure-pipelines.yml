@@ -31,7 +31,7 @@ jobs:
   - script: |
       source activate ntsynt_ci
       mamba install --yes -c bioconda -c conda-forge python=3.12
-      mamba install --yes -c bioconda -c conda-forge intervaltree pybedtools ncls 'python-igraph<1.0.0' compilers btllib meson ninja snakemake samtools pytest seqtk pylint
+      mamba install --yes -c bioconda -c conda-forge intervaltree pybedtools ncls 'python-igraph>=1.0.0' compilers btllib meson ninja snakemake samtools pytest seqtk pylint
     displayName: Install dependencies
 
   - script: |
@@ -58,6 +58,16 @@ jobs:
       cd tests
       pytest -vs ntsynt_tests.py
     displayName: Run pytests
+
+  - script: |
+      source activate ntsynt_ci
+      python3 -c 'import igraph; print(igraph.__version__)'
+      mamba install --yes -c bioconda -c conda-forge 'python-igraph<1.0.0'
+      python3 -c 'import igraph; print(igraph.__version__)'
+      export PATH=$(pwd)/ntSynt_build/bin:$PATH
+      cd tests
+      pytest -vs ntsynt_tests.py
+    displayName: Run pytests with python-igraph<1.0.0
 
 - job:
   displayName: macOS-latest
@@ -106,3 +116,13 @@ jobs:
       cd tests
       pytest -vs ntsynt_tests.py
     displayName: Run pytests
+
+  - script: |
+      source activate ntsynt_ci
+      python3 -c 'import igraph; print(igraph.__version__)'
+      mamba install --yes -c bioconda -c conda-forge 'python-igraph<1.0.0'
+      python3 -c 'import igraph; print(igraph.__version__)'
+      export PATH=$(pwd)/ntSynt_build/bin:$PATH
+      cd tests
+      pytest -vs ntsynt_tests.py
+    displayName: Run pytests with python-igraph<1.0.0
