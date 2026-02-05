@@ -106,7 +106,7 @@ conda install -c bioconda -c conda-forge ntsynt
   - [intervaltree](https://github.com/chaimleib/intervaltree)
   - [pybedtools](https://daler.github.io/pybedtools/)
   - [ncls](https://github.com/pyranges/ncls)
-  - [python-igraph <v1.0.0](https://python.igraph.org/en/stable/)
+  - [python-igraph](https://python.igraph.org/en/stable/)
 - GCC 6+ or Clang 5+ (with OpenMP and C++17 support)
 - [btllib v1.6.2+](https://github.com/bcgsc/btllib)
 - [meson](https://mesonbuild.com/)
