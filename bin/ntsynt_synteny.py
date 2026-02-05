@@ -16,9 +16,9 @@ import intervaltree
 import pybedtools
 import btllib
 import ncls
+import igraph as ig
 import ntjoin_utils
 import ntjoin
-import igraph as ig
 from synteny_block import SyntenyBlock
 
 
