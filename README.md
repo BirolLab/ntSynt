@@ -1,8 +1,8 @@
-![GitHub Release](https://img.shields.io/github/v/release/bcgsc/ntsynt)
+![GitHub Release](https://img.shields.io/github/v/release/BirolLab/ntsynt)
 ![Conda Downloads](https://img.shields.io/conda/dn/bioconda/ntsynt?label=Conda%20downloads)
 [![Preprint](https://img.shields.io/badge/Preprint-blue.svg)](https://doi.org/10.1101/2024.02.07.579356)
 
-![Logo](https://github.com/bcgsc/ntSynt/blob/main/logo/ntsynt-logo.png)
+![Logo](https://github.com/BirolLab/ntSynt/blob/main/logo/ntsynt-logo.png)
 
 # ntSynt
 
@@ -23,9 +23,9 @@ Multi-genome macrosynteny detection using a dynamic minimizer graph approach.
 
 ## Description of ntSynt
 
-ntSynt takes multiple genomes as input, and will compute synteny blocks that are in common with each of these input assemblies. These macrosyntenic blocks can enable a wide variety of comparative genomics studies between multiple genomes of varying divergences. ntSynt builds on the [ntJoin](https://github.com/bcgsc/ntJoin) codebase.
+ntSynt takes multiple genomes as input, and will compute synteny blocks that are in common with each of these input assemblies. These macrosyntenic blocks can enable a wide variety of comparative genomics studies between multiple genomes of varying divergences. ntSynt builds on the [ntJoin](https://github.com/BirolLab/ntJoin) codebase.
 
-For more technical information about the various steps in ntSynt, see our [wiki page](https://github.com/bcgsc/ntSynt/wiki/Description-of-the-ntSynt-algorithm).
+For more technical information about the various steps in ntSynt, see our [wiki page](https://github.com/BirolLab/ntSynt/wiki/Description-of-the-ntSynt-algorithm).
 
 ## Credits
 
@@ -170,12 +170,12 @@ optional arguments:
   --tsv TSV            ntSynt synteny block file
   --fai FAI [FAI ...]  FAI files for the compared genomes
 ```
-More information can be found on our [wiki page](https://github.com/bcgsc/ntSynt/wiki/de-novo-statistics-summary)
+More information can be found on our [wiki page](https://github.com/BirolLab/ntSynt/wiki/de-novo-statistics-summary)
 
 ### Tips / Visualization <a name=tips></a>
 - To lower the peak memory usage, increase the false positive rate (--fpr) for the constructed Bloom filter
 - Customize parameters such as --merge, --indel, --block_size and --w_rounds for your particular input data and research questions
-- For visualizing the multi-genome output synteny blocks, please refer to 1) [ntSynt-viz](https://github.com/bcgsc/ntSynt-viz) and/or 2)the sub-directory [visualization_scripts](https://github.com/bcgsc/ntSynt/tree/main/visualization_scripts)
+- For visualizing the multi-genome output synteny blocks, please refer to 1) [ntSynt-viz](https://github.com/BirolLab/ntSynt-viz) and/or 2)the sub-directory [visualization_scripts](https://github.com/BirolLab/ntSynt/tree/main/visualization_scripts)
 - If you do not know the approximate sequence divergence between the input assemblies, we recommend using [Mash](https://github.com/marbl/Mash) to estimate the divergences
 
 
