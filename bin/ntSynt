@@ -38,7 +38,7 @@ def main():
                   "1% - 10% divergence:\t--block_size 1000 --indel 50000 --merge 100000 --w_rounds 250 100",
                   "> 10% divergence:\t--block_size 10000 --indel 100000 --merge 1000000 --w_rounds 500 250",
                   "If any of these parameters are set manually, those values will override the above.",
-                  "\nIf you have any questions about ntSynt, please create a GitHub issue: https://github.com/bcgsc/ntSynt"])
+                  "\nIf you have any questions about ntSynt, please create a GitHub issue: https://github.com/BirolLab/ntSynt"])
 
     parser = argparse.ArgumentParser(description="ntSynt: Multi-genome synteny detection using minimizer graphs",
                                      formatter_class=argparse.RawTextHelpFormatter,
