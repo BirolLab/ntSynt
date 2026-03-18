@@ -1,6 +1,6 @@
 ![GitHub Release](https://img.shields.io/github/v/release/BirolLab/ntsynt)
 ![Conda Downloads](https://img.shields.io/conda/dn/bioconda/ntsynt?label=Conda%20downloads)
-[![Preprint](https://img.shields.io/badge/Preprint-blue.svg)](https://doi.org/10.1101/2024.02.07.579356)
+[![BMC Biology manuscript](https://img.shields.io/badge/BMC%20Biology%20manuscript-blue.svg)](https://doi.org/10.1186/s12915-025-02455-w)
 
 ![Logo](https://github.com/BirolLab/ntSynt/blob/main/logo/ntsynt-logo.png)
 
