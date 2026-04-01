@@ -32,7 +32,7 @@ optional arguments:
                         synteny_gggenomes_plot)
 ```
 Example:
-![Example_gggenomes](https://github.com/bcgsc/ntSynt/blob/main/visualization_scripts/example_gggenomes.png)
+![Example_gggenomes](https://github.com/BirolLab/ntSynt/blob/main/visualization_scripts/example_gggenomes.png)
 
 * These plots are highly customizable, so edit/adapt the script as needed!
 
@@ -77,4 +77,4 @@ optional arguments:
 * These plots can also be customized as needed (plot size, scale, comparing additional tools, etc.)
 
 Example:
-![Example_gggenomes](https://github.com/bcgsc/ntSynt/blob/main/visualization_scripts/example_chromosome-painting.png)
+![Example_gggenomes](https://github.com/BirolLab/ntSynt/blob/main/visualization_scripts/example_chromosome-painting.png)
