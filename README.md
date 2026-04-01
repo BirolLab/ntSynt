@@ -108,7 +108,7 @@ conda install -c bioconda -c conda-forge ntsynt
   - [ncls](https://github.com/pyranges/ncls)
   - [python-igraph](https://python.igraph.org/en/stable/)
 - GCC 6+ or Clang 5+ (with OpenMP and C++17 support)
-- [btllib v1.6.2+](https://github.com/bcgsc/btllib)
+- [btllib v1.6.2+](https://github.com/BirolLab/btllib)
 - [meson](https://mesonbuild.com/)
 - [ninja](https://ninja-build.org/)
 - [snakemake](https://snakemake.readthedocs.io/en/stable/)
