@@ -95,7 +95,7 @@ jobs:
 
   - script: |
       source activate ntsynt_ci
-      mamba install --yes -c bioconda -c conda-forge intervaltree pybedtools ncls python-igraph compilers  btllib meson ninja snakemake samtools pytest seqtk
+      mamba install --yes -c bioconda -c conda-forge intervaltree pybedtools ncls python-igraph compilers  btllib meson ninja snakemake samtools pytest seqtk pigz
     displayName: Install dependencies
 
   - script: |
