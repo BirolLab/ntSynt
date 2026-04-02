@@ -175,7 +175,7 @@ More information can be found on our [wiki page](https://github.com/BirolLab/ntS
 ### Tips / Visualization <a name=tips></a>
 - To lower the peak memory usage, increase the false positive rate (--fpr) for the constructed Bloom filter
 - Customize parameters such as --merge, --indel, --block_size and --w_rounds for your particular input data and research questions
-- For visualizing the multi-genome output synteny blocks, check out our streamlined visualization tool please refer to [ntSynt-viz](https://github.com/BirolLab/ntSynt-viz). Examples of the scripts used to generate the figures in the [ntSynt manuscript](https://link.springer.com/article/10.1186/s12915-025-02455-w) can be found in the sub-directory [visualization_scripts](https://github.com/BirolLab/ntSynt/tree/main/visualization_scripts)
+- For visualizing the multi-genome output synteny blocks, check out our streamlined visualization tool [ntSynt-viz](https://github.com/BirolLab/ntSynt-viz). Examples of the scripts used to generate the figures in the [ntSynt manuscript](https://link.springer.com/article/10.1186/s12915-025-02455-w) can be found in the sub-directory [visualization_scripts](https://github.com/BirolLab/ntSynt/tree/main/visualization_scripts)
 - If you do not know the approximate sequence divergence between the input assemblies, we recommend using [Mash](https://github.com/marbl/Mash) to estimate the divergences
 
 
