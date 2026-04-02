@@ -1,3 +1,5 @@
+## NOTE: These example visualization scripts are kept here for posterity, but check out our visualization tool [ntSynt-viz](https://github.com/BirolLab/ntSynt-viz) for a more user-friendly and streamlined approach to generating synteny visualizations!
+
 # Example visualization scripts for ntSynt
 
 Here, we provide basic examples scripts for generating ribbon plots and chromosome sequence painting plots to visualize synteny blocks computed by ntSynt. Each R script script can be seen as a starting point, and can be customized as needed. 
