@@ -120,7 +120,7 @@ def main():
         parser.error("Must supply at least two reference genomes to compare")
 
     print(NTSYNT_ASCII)
-    intro_string = ["Running ntSynt...",
+    intro_string = [f"Running {NTSYNT_VERSION}...",
                     f"Specified percent divergence: {args.divergence}",
                     "Parameter settings:",
                     f"\tfastas {fastas_input}",
