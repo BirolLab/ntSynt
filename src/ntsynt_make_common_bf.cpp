@@ -15,8 +15,6 @@ Creating a common Bloom filter (with k-mers found in all input assemblies) using
 a cascading Bloom filter approach
 */
 
-// Number of hash functions - keep at 1
-const unsigned HASH_FNS = 1;
 // Converting bits to bytes
 const unsigned NUM_BITS_PER_BYTE = 8;
 
@@ -26,7 +24,7 @@ Using the formula found in Broder & Mitzenmacher, 2004, simplified for
 one hash function.
 */
 long long
-approximate_bf_size(std::string genome_file, double fpr, int threads)
+approximate_bf_size(std::string genome_file, double fpr, int hashes, int threads)
 {
   long long genome_size = 0;
   btllib::SeqReader reader(
@@ -35,7 +33,9 @@ approximate_bf_size(std::string genome_file, double fpr, int threads)
     genome_size += record.seq.length();
   }
   std::cout << "Genome size (bp): " << genome_size << std::endl;
-  long long size_bits = ceil(((-1 * genome_size) / log(1 - fpr)));
+  double m_bits = -1.0 * hashes * genome_size / log(1.0 - pow(fpr, 1.0 / hashes));
+
+  long long size_bits = (long long) std::ceil(m_bits);
   return size_bits / NUM_BITS_PER_BYTE;
 }
 
@@ -65,6 +65,11 @@ main(int argc, const char** argv)
   parser.add_argument("--bf")
     .help("Bloom filter size in bytes (optional)")
     .scan<'d', long long>();
+  
+  parser.add_argument("--hashes")
+    .help("Number of hash functions")
+    .default_value(1U)
+    .scan<'u', unsigned>();
 
   parser.add_argument("-t")
     .help("Number of threads")
@@ -85,6 +90,7 @@ main(int argc, const char** argv)
   unsigned num_threads = parser.get<unsigned>("t");
   double fpr = parser.get<double>("fpr");
   unsigned k = parser.get<unsigned>("k");
+  unsigned hashes = parser.get<unsigned>("hashes");
   std::string prefix = parser.get<std::string>("p");
 
   std::cout << "Parameters:" << std::endl;
@@ -96,6 +102,7 @@ main(int argc, const char** argv)
   std::cout << "\t\t-t " << num_threads << std::endl;
   std::cout << "\t\t-k " << k << std::endl;
   std::cout << "\t\t--fpr " << fpr << std::endl;
+  std::cout << "\t\t--hashes " << hashes << std::endl;
   std::cout << "\t\t-p " << prefix << std::endl;
 
   #if _OPENMP
@@ -113,14 +120,14 @@ main(int argc, const char** argv)
     std::cout << "\t\t--bf " << bf_size << std::endl;
   } else {
     std::cout << "Calculating BF size based on input genome size" << std::endl;
-    bf_size = approximate_bf_size(genome_files[0], fpr, num_threads);
+    bf_size = approximate_bf_size(genome_files[0], fpr, hashes, num_threads);
   }
   std::cout << "BF size (bytes): " << bf_size << std::endl;
 
 
   /* Load the initial level 1 BF with k-mers from the first genome  */
   btllib::KmerBloomFilter* bf =
-    new btllib::KmerBloomFilter(bf_size, HASH_FNS, k);
+    new btllib::KmerBloomFilter(bf_size, hashes, k);
   btllib::log_info("Reading " + genome_files[0]);
   btllib::SeqReader reader(
     genome_files[0], btllib::SeqReader::Flag::LONG_MODE, num_threads);
@@ -134,7 +141,7 @@ main(int argc, const char** argv)
   /* For each subsequent genome, only insert into next level BF if the k-mer is
   in the previous level BF. */
   btllib::KmerBloomFilter* new_bf =
-    new btllib::KmerBloomFilter(bf_size, HASH_FNS, k);
+    new btllib::KmerBloomFilter(bf_size, hashes, k);
 
   size_t num_assemblies = genome_files.size();
   for (size_t i = 1; i < num_assemblies; ++i) {
@@ -144,7 +151,7 @@ main(int argc, const char** argv)
       genome, btllib::SeqReader::Flag::LONG_MODE, num_threads);
     #pragma omp parallel
     for (const auto record : reader) {
-      btllib::NtHash nthash(record.seq, HASH_FNS, k);
+      btllib::NtHash nthash(record.seq, hashes, k);
       while (nthash.roll()) {
         if (bf->contains(nthash.hashes())) {
           new_bf->insert(nthash.hashes());
@@ -155,7 +162,7 @@ main(int argc, const char** argv)
     delete bf;
     bf = new_bf;
     if (i < num_assemblies - 1) {
-      new_bf = new btllib::KmerBloomFilter(bf_size, HASH_FNS, k);
+      new_bf = new btllib::KmerBloomFilter(bf_size, hashes, k);
     }
   }
 
