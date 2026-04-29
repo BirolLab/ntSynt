@@ -59,6 +59,8 @@ def main():
     parser.add_argument("-t", help="Number of threads [12]", type=int, default=12)
     parser.add_argument("--fpr", help="False positive rate for Bloom filter creation [0.025]",
                         default=0.025, type=float)
+    parser.add_argument("--hashes", help="Number of hash functions for Bloom filter creation [3]", default=3,
+                        type=int)
     parser.add_argument("-b", "--block_size", help="Minimum synteny block size (bp)",
                         type=int, required=False)
     parser.add_argument("--merge", help="Maximum distance between collinear synteny blocks for merging (bp). \n"\
@@ -134,6 +136,7 @@ def main():
                     f"\t-w {args.w}",
                     f"\t-t {args.t}",
                     f"\t--fpr {args.fpr}",
+                    f"\t--hashes {args.hashes}",
                     ]
     print("\n".join(intro_string), flush=True)
 
@@ -146,7 +149,7 @@ def main():
     command = f"snakemake -s {base_dir}/ntsynt_run_pipeline.smk -p --cores {args.t} " \
                 f"--config references='{fastas_input}' kmer={args.k} window={args.w} threads={args.t} fpr={args.fpr} " \
                 f"prefix={args.prefix} w_rounds='{args.w_rounds}' indel_merge={args.indel} " \
-                f"collinear_merge={args.merge} block_size={args.block_size} "
+                f"collinear_merge={args.merge} block_size={args.block_size} hashes={args.hashes} "
     command += "common=False " if args.no_common else "common=True "
     command += "simplify_graph=False " if args.no_simplify_graph else "simplify_graph=True "
     command += "benchmark=True " if args.benchmark else "benchmark=False "

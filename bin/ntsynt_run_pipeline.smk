@@ -11,6 +11,7 @@ references = config["references"] if "references" in config else "Must specify '
 k = config["kmer"] if "kmer" in config else 24
 w = config["window"] if "window" in config else 1000
 fpr = config["fpr"] if "fpr" in config else 0.025
+hashes = config["hashes"] if "hashes" in config else 3
 max_threads = config["threads"] if "threads" in config else 4
 prefix = config["prefix"] if "prefix" in config else "ntSynt_out"
 common = config["common"] if "common" in config else True
@@ -56,7 +57,7 @@ rule make_common_bf:
     input: refs=references
     output: f"{prefix}.common.bf"
     threads: max_threads
-    params: options=f"-p {prefix}.common --fpr {fpr} -k {k}",
+    params: options=f"-p {prefix}.common --fpr {fpr} --hashes {hashes} -k {k}",
             path_to_script=f"{script_path}/ntsynt_make_common_bf",
             benchmarking=f"{benchmark_path} -o {prefix}.make_common_bf.time" if benchmark else []
     shell: "{params.benchmarking} {params.path_to_script} --genome {input.refs} {params.options} -t {threads}"
