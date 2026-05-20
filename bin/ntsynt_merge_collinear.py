@@ -21,6 +21,7 @@ from typing import Optional
 
 @dataclass
 class AssemblyBlock:
+    "Represents the coordinates and orientation of a synteny block in a specific assembly."
     assembly: str
     contig_id: str
     start: int
@@ -30,6 +31,7 @@ class AssemblyBlock:
 
 @dataclass
 class SyntenyBlock:
+    "Represents synteny block coordinates, and reason for discontinuity with previous synteny block"
     block_id: int
     assembly_blocks: dict = field(default_factory=dict)  # assembly -> AssemblyBlock
     broken_reason: Optional[str] = None
@@ -43,8 +45,7 @@ def get_difference_between_blocks(curr: AssemblyBlock, nxt: AssemblyBlock) -> in
     """
     if curr.strand == "+":
         return nxt.start - curr.end
-    else:
-        return curr.start - nxt.end
+    return curr.start - nxt.end
 
 
 def parse_blocks(filepath: str) -> list[SyntenyBlock]:
@@ -67,7 +68,7 @@ def parse_blocks(filepath: str) -> list[SyntenyBlock]:
             start      = int(parts[3])
             end        = int(parts[4])
             strand     = parts[5]
-            
+
             if first_assembly is None:
                 first_assembly = assembly
 
@@ -188,6 +189,7 @@ def write_blocks(blocks: list[SyntenyBlock]) -> None:
 
 
 def main():
+    "Parse arguments and run merging of collinear synteny blocks."
     parser = argparse.ArgumentParser(
         description="Merge collinear synteny blocks from an ntSynt TSV file."
     )
