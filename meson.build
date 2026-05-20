@@ -1,5 +1,5 @@
 project('ntSynt', 'cpp',
-        version : '1.0.5',
+        version : '1.0.6',
         license : 'GPL-3',
         default_options : [ 'cpp_std=c++17', 'warning_level=3', 'werror=true' ])
 
