@@ -94,10 +94,10 @@ jobs:
     displayName: Create Anaconda environment
 
   - script: |
+      source activate ntsynt_ci
       export CONDA_REPODATA_THREADS=1
       export CONDA_NO_PLUGINS=1
       conda config --set channel_priority strict
-      source activate ntsynt_ci
       mamba install --yes  -c conda-forge -c bioconda intervaltree pybedtools ncls python-igraph compilers  btllib meson ninja snakemake samtools pytest seqtk pigz
     displayName: Install dependencies
 
