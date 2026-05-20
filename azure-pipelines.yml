@@ -98,7 +98,8 @@ jobs:
       export CONDA_REPODATA_THREADS=1
       export CONDA_NO_PLUGINS=1
       conda config --set channel_priority strict
-      mamba install --yes  -c conda-forge -c bioconda intervaltree pybedtools ncls python-igraph compilers  btllib meson ninja snakemake samtools pytest seqtk pigz
+      mamba install --yes  -c conda-forge -c bioconda python-igraph btllib
+      mamba install --yes  -c conda-forge -c bioconda intervaltree pybedtools ncls compilers meson ninja snakemake samtools pytest seqtk pigz
     displayName: Install dependencies
 
   - script: |
