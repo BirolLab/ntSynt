@@ -5,7 +5,7 @@ Run the minimizer graph stage of ntSynt
 import argparse
 from ntsynt_synteny import NtSyntSynteny
 
-NTSYNT_VERSION = 'ntSynt v1.0.6'
+NTSYNT_VERSION = 'ntSynt v1.0.7'
 
 def parse_arguments():
     "Parse arguments from argparse"
