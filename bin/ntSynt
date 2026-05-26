@@ -7,6 +7,7 @@ import argparse
 import os
 import shlex
 import subprocess
+import re
 from packaging import version
 
 import snakemake
@@ -29,6 +30,17 @@ def read_fasta_files(filename):
         for fasta in fin:
             fastas.append(fasta.strip())
     return fastas
+
+def get_btllib_version():
+    "Return the version of btllib (By checking indexlr) installed"
+    result = subprocess.run(["indexlr", "--version"], text=True, check=True,
+                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    match = re.search(r"(\d+\.\d+\.\d+)", result.stdout)
+    if not match:
+        print(match)
+        print(result.stdout)
+        raise ValueError(f"Could not parse version from: {result.stdout!r}")
+    return version.Version(match.group(1))
 
 def main():
     "Run ntSynt snakemake file"
@@ -112,6 +124,14 @@ def main():
     if args.fastas and args.fastas_list:
         parser.error("Please supply the input genome fasta files as positional arguments, "\
                     "or specify a single file (one fasta per line) with --fastas_list, NOT both.")
+        
+    if args.hashes > 1:
+        btllib_version = get_btllib_version()
+        if btllib_version < version.Version("1.7.8"):
+            print("WARNING: Using > 1 hash function for Bloom filter creation requires btllib 1.7.8 or higher. " \
+                    f"Current version: {btllib_version}. Please update btllib to use this feature.", flush=True)
+            print("WARNING: Setting --hashes 1 to proceed with ntSynt run.", flush=True)
+            args.hashes = 1
 
     if args.fastas_list:
         fastas_input = read_fasta_files(args.fastas_list)

@@ -40,21 +40,24 @@ def test_prep_files():
 def test_2_genomes():
     "Testing ntSynt with two input genomes"
     genome1, genome2 = "celegans-chrII-III.fa", "celegans-chrII-III.A.fa"
-    launch_ntSynt(genome1, genome2, k=24, prefix="celegans-A-ntSynt", indel=500, merge=3000)
+    launch_ntSynt(genome1, genome2, k=24, prefix="celegans-A-ntSynt", indel=500, merge=3000,
+                  hashes=1)
     are_expected_blocks("celegans-A-ntSynt.synteny_blocks.tsv",
                         "expected_result/celegans-A-ntSynt.synteny_blocks.tsv")
 
 def test_3_genomes():
     "Testing ntSynt with three input genomes"
     genome1, genome2, genome3 = "celegans-chrII-III.fa", "celegans-chrII-III.A.fa", "celegans-chrII-III.B.fa"
-    launch_ntSynt(genome1, genome2, genome3, k=20, prefix="celegans-A-B-ntSynt", indel=500, merge=3000)
+    launch_ntSynt(genome1, genome2, genome3, k=20, prefix="celegans-A-B-ntSynt", indel=500, merge=3000,
+                  hashes=3)
     are_expected_blocks("celegans-A-B-ntSynt.synteny_blocks.tsv",
                         "expected_result/celegans-A-B-ntSynt.synteny_blocks.tsv")
 
 def test_3_genomes_fof():
     "Testing ntSynt with three input genomes, specified using a file of files"
     genome_list = "genome_file_list.tsv"
-    launch_ntSynt_fof(genome_list, k=20, prefix="celegans-A-B-ntSynt-fof", indel=500, merge=3000)
+    launch_ntSynt_fof(genome_list, k=20, prefix="celegans-A-B-ntSynt-fof", indel=500, merge=3000,
+                      hashes=3)
     are_expected_blocks("celegans-A-B-ntSynt-fof.synteny_blocks.tsv",
                         "expected_result/celegans-A-B-ntSynt.synteny_blocks.tsv")
 
