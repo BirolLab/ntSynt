@@ -82,7 +82,7 @@ jobs:
   - script: |
       mkdir -p ~/miniforge3
       # May 2026: latest miniforge uses a mamba which is much slower. Pin to lower version for now.
-      curl -L https://github.com/conda-forge/miniforge/releases/download/26.3.2-0/Miniforge3-26.3.2-0-MacOSX-x86_64.sh  -o ~/miniforge3/miniforge.sh
+      curl -L https://github.com/conda-forge/miniforge/releases/download/26.1.0-0/Miniforge3-MacOSX-x86_64.sh  -o ~/miniforge3/miniforge.sh
       bash ~/miniforge3/miniforge.sh -b -u -p ~/miniforge3
       rm -rf  ~/miniforge3/miniforge.sh
       ~/miniforge3/bin/conda init bash
