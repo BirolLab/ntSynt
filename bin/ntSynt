@@ -37,8 +37,6 @@ def get_btllib_version():
                             stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     match = re.search(r"(\d+\.\d+\.\d+)", result.stdout)
     if not match:
-        print(match)
-        print(result.stdout)
         raise ValueError(f"Could not parse version from: {result.stdout!r}")
     return version.Version(match.group(1))
 
