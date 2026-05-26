@@ -96,7 +96,8 @@ jobs:
   - script: |
       source activate ntsynt_ci
       mamba install --yes -c bioconda -c conda-forge mamba=2.6.2 # mamba>2.6.0 running very slowly - update to use MAMBA_USE_SHARDED_REPODATA=OFF
-      mamba install --yes -c bioconda -c conda-forge python
+      mamba install --yes -c bioconda -c conda-forge python=3.13
+      mamba --version
       MAMBA_USE_SHARDED_REPODATA=OFF mamba install --yes -c bioconda -c conda-forge intervaltree pybedtools ncls python-igraph compilers  btllib meson ninja snakemake samtools pytest seqtk pigz
     displayName: Install dependencies
 
