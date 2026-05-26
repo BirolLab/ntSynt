@@ -41,7 +41,7 @@ Lauren Coombe, Parham Kazemi, Johnathan Wong, Inanc Birol, René L. Warren. 2025
 ## Usage
 
 ```
-usage: ntSynt [-h] [--fastas_list FASTAS_LIST] -d DIVERGENCE [-p PREFIX] [-k K] [-w W] [-t T] [--fpr FPR] [-b BLOCK_SIZE] [--merge MERGE]
+usage: ntSynt [-h] [--fastas_list FASTAS_LIST] -d DIVERGENCE [-p PREFIX] [-k K] [-w W] [-t T] [--fpr FPR] [--hashes HASHES] [-b BLOCK_SIZE] [--merge MERGE]
               [--w_rounds W_ROUNDS [W_ROUNDS ...]] [--indel INDEL] [-n] [--benchmark] [-f] [--dev] [-v]
               [fastas ...]
 
@@ -64,6 +64,7 @@ optional arguments:
   -w W                  Minimizer window size [1000]
   -t T                  Number of threads [12]
   --fpr FPR             False positive rate for Bloom filter creation [0.025]
+  --hashes HASHES       Number of hash functions for Bloom filter creation [3]
   -b BLOCK_SIZE, --block_size BLOCK_SIZE
                         Minimum synteny block size (bp)
   --merge MERGE         Maximum distance between collinear synteny blocks for merging (bp). 
