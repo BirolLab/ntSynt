@@ -51,7 +51,11 @@ rule faidx:
     output: "{file}.fai"
     params: benchmarking=expand("{benchmark_path} -o {{file}}.faidx.time", benchmark_path=benchmark_path) if benchmark else []
     threads: 1
-    shell: "{params.benchmarking} samtools faidx -o {output} {input.fa}"
+    run:
+        if input.fa.endswith(".gz"):
+            shell("{params.benchmarking} gunzip -c {input.fa} | samtools faidx -o {output} -")
+        else:
+            shell("{params.benchmarking} samtools faidx -o {output} {input.fa}")
 
 rule make_common_bf:
     input: refs=references

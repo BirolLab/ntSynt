@@ -12,6 +12,9 @@ import re
 import shlex
 import subprocess
 import sys
+import gzip
+import shutil
+import tempfile
 import intervaltree
 import pybedtools
 import btllib
@@ -132,6 +135,17 @@ class NtSyntSynteny(ntjoin.Ntjoin):
 
         return synteny_beds
 
+    def prepare_fasta_for_bedtools(self, fa_filename_full):
+        """If fasta is gzipped, decompress to a temp file and return its path.
+        Returns (path, is_temp) — caller should delete path if is_temp is True."""
+        if fa_filename_full.endswith(".gz"):
+            tmp = tempfile.NamedTemporaryFile(suffix=".fa", delete=False, dir=os.getcwd()) # pylint: disable=consider-using-with
+            with gzip.open(fa_filename_full, "rb") as f_in:
+                shutil.copyfileobj(f_in, tmp)
+            tmp.close()
+            return tmp.name, True
+        return fa_filename_full, False
+
     def mask_assemblies_with_synteny_extents(self, synteny_beds, w):
         "Mask each reference assembly with determined synteny blocks"
         mx_to_fa_dict = {}
@@ -142,10 +156,15 @@ class NtSyntSynteny(ntjoin.Ntjoin):
             bed_str = "\n".join(bed_str)
             fa_filename = self.find_fa_name(assembly)
             fa_filename_full = assembly_to_fastas[fa_filename]
-            synteny_bed = pybedtools.BedTool(bed_str, from_string=True).slop(g=f"{fa_filename}.fai",
-                                                                             l=-1*(w+self.args.k),
-                                                                             r=-1*(w+self.args.k)).sort()
-            synteny_bed.mask_fasta(fi=fa_filename_full, fo=f"{fa_filename}_masked.fa.tmp")
+            fa_tmp, is_temp = self.prepare_fasta_for_bedtools(fa_filename_full)
+            try:
+                synteny_bed = pybedtools.BedTool(bed_str, from_string=True).slop(g=f"{fa_filename}.fai",
+                                                                                l=-1*(w+self.args.k),
+                                                                                r=-1*(w+self.args.k)).sort()
+                synteny_bed.mask_fasta(fi=fa_tmp, fo=f"{fa_filename}_masked.fa.tmp")
+            finally:
+                if is_temp:
+                    os.remove(fa_tmp)
 
             # pybedtools may output multi-line fasta which breaks btllib reading, need seqtk to make single line
             with open(f"{fa_filename}_masked.fa", "w", encoding="utf-8") as fout:

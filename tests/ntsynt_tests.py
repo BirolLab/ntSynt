@@ -22,12 +22,18 @@ def launch_ntSynt_fof(genome_file_list, prefix="ntSynt", k=24, w=1000, **kwargs)
     ret_code = subprocess.call(cmd)
     assert ret_code == 0
 
+def strip_gz_from_line(line):
+    "Strip .gz from the assembly name (second column) of the synteny TSV line"
+    fields = line.split("\t")
+    fields[1] = fields[1].replace(".gz", "")
+    return "\t".join(fields)
+
 def are_expected_blocks(block_file1, block_file2):
     "Check that the given synteny blocks are as expected"
     with open(block_file1, 'r', encoding="utf-8") as fin1:
         with open(block_file2, 'r', encoding="utf-8") as fin2:
             while (line1 := fin1.readline()) and (line2 := fin2.readline()):
-                assert line1 == line2
+                assert strip_gz_from_line(line1) == strip_gz_from_line(line2)
 
 def test_prep_files():
     "Prep the test files"
@@ -68,3 +74,10 @@ def test_cleanup():
         cmd = shlex.split(f"pigz {infile}")
         ret_code = subprocess.call(cmd)
         assert ret_code == 0
+
+def test_3_genomes_gz():
+    "Testing ntSynt with three input gzipped genomes"
+    genome1, genome2, genome3 = "celegans-chrII-III.fa.gz", "celegans-chrII-III.A.fa.gz", "celegans-chrII-III.B.fa.gz"
+    launch_ntSynt(genome1, genome2, genome3, k=20, prefix="celegans-A-B-ntSynt_gz", indel=500, merge=3000)
+    are_expected_blocks("celegans-A-B-ntSynt_gz.synteny_blocks.tsv",
+                        "expected_result/celegans-A-B-ntSynt.synteny_blocks.tsv")
