@@ -31,7 +31,7 @@ jobs:
   - script: |
       source activate ntsynt_ci
       mamba install --yes -c bioconda -c conda-forge python=3.12
-      mamba install --yes -c bioconda -c conda-forge intervaltree pybedtools ncls 'python-igraph>=1.0.0' compilers btllib meson ninja snakemake samtools pytest seqtk pylint
+      MAMBA_USE_SHARDED_REPODATA=OFF mamba install --yes -c bioconda -c conda-forge intervaltree pybedtools ncls 'python-igraph>=1.0.0' compilers btllib meson ninja snakemake samtools pytest seqtk pylint
     displayName: Install dependencies
 
   - script: |
@@ -81,7 +81,8 @@ jobs:
 
   - script: |
       mkdir -p ~/miniforge3
-      curl -L https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-MacOSX-x86_64.sh  -o ~/miniforge3/miniforge.sh
+      # May 2026: latest miniforge uses a mamba version which is much slower. Pin to lower version for now.
+      curl -L https://github.com/conda-forge/miniforge/releases/download/26.1.0-0/Miniforge3-MacOSX-x86_64.sh  -o ~/miniforge3/miniforge.sh
       bash ~/miniforge3/miniforge.sh -b -u -p ~/miniforge3
       rm -rf  ~/miniforge3/miniforge.sh
       ~/miniforge3/bin/conda init bash
@@ -95,7 +96,8 @@ jobs:
 
   - script: |
       source activate ntsynt_ci
-      mamba install --yes  -c conda-forge -c bioconda intervaltree pybedtools ncls python-igraph compilers  btllib meson ninja snakemake samtools pytest seqtk pigz
+      mamba --version
+      mamba install --yes -c bioconda -c conda-forge intervaltree pybedtools ncls python-igraph compilers  'btllib>=1.7.8' meson ninja snakemake samtools pytest seqtk pigz
     displayName: Install dependencies
 
   - script: |

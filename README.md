@@ -41,7 +41,7 @@ Lauren Coombe, Parham Kazemi, Johnathan Wong, Inanc Birol, René L. Warren. 2025
 ## Usage
 
 ```
-usage: ntSynt [-h] [--fastas_list FASTAS_LIST] -d DIVERGENCE [-p PREFIX] [-k K] [-w W] [-t T] [--fpr FPR] [-b BLOCK_SIZE] [--merge MERGE]
+usage: ntSynt [-h] [--fastas_list FASTAS_LIST] -d DIVERGENCE [-p PREFIX] [-k K] [-w W] [-t T] [--fpr FPR] [--hashes HASHES] [-b BLOCK_SIZE] [--merge MERGE]
               [--w_rounds W_ROUNDS [W_ROUNDS ...]] [--indel INDEL] [-n] [--benchmark] [-f] [--dev] [-v]
               [fastas ...]
 
@@ -64,6 +64,7 @@ optional arguments:
   -w W                  Minimizer window size [1000]
   -t T                  Number of threads [12]
   --fpr FPR             False positive rate for Bloom filter creation [0.025]
+  --hashes HASHES       Number of hash functions for Bloom filter creation [3]
   -b BLOCK_SIZE, --block_size BLOCK_SIZE
                         Minimum synteny block size (bp)
   --merge MERGE         Maximum distance between collinear synteny blocks for merging (bp). 
@@ -108,7 +109,7 @@ conda install -c bioconda -c conda-forge ntsynt
   - [ncls](https://github.com/pyranges/ncls)
   - [python-igraph](https://python.igraph.org/en/stable/)
 - GCC 6+ or Clang 5+ (with OpenMP and C++17 support)
-- [btllib v1.6.2+](https://github.com/BirolLab/btllib)
+- [btllib v1.7.8+](https://github.com/BirolLab/btllib)
 - [meson](https://mesonbuild.com/)
 - [ninja](https://ninja-build.org/)
 - [snakemake](https://snakemake.readthedocs.io/en/stable/)
@@ -173,7 +174,7 @@ optional arguments:
 More information can be found on our [wiki page](https://github.com/BirolLab/ntSynt/wiki/de-novo-statistics-summary)
 
 ### Tips / Visualization <a name=tips></a>
-- To lower the peak memory usage, increase the false positive rate (--fpr) for the constructed Bloom filter
+- To lower the peak memory usage, increase the number of hash functions (--hashes) and/or increase the false positive rate (--fpr) for the constructed Bloom filter
 - Customize parameters such as --merge, --indel, --block_size and --w_rounds for your particular input data and research questions
 - For visualizing the multi-genome output synteny blocks, check out our streamlined visualization tool [ntSynt-viz](https://github.com/BirolLab/ntSynt-viz). Examples of the scripts used to generate the figures in the [ntSynt manuscript](https://link.springer.com/article/10.1186/s12915-025-02455-w) can be found in the sub-directory [visualization_scripts](https://github.com/BirolLab/ntSynt/tree/main/visualization_scripts)
 - If you do not know the approximate sequence divergence between the input assemblies, we recommend using [Mash](https://github.com/marbl/Mash) to estimate the divergences
