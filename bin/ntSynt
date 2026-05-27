@@ -12,7 +12,7 @@ from packaging import version
 
 import snakemake
 
-NTSYNT_VERSION = "ntSynt v1.0.7"
+NTSYNT_VERSION = "ntSynt v1.0.8"
 
 NTSYNT_ASCII = r"""
         _    ____                 _ 
