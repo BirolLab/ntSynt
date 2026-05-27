@@ -68,7 +68,7 @@ main(int argc, const char** argv)
   
   parser.add_argument("--hashes")
     .help("Number of hash functions")
-    .default_value(1U)
+    .default_value(3U)
     .scan<'u', unsigned>();
 
   parser.add_argument("-t")
