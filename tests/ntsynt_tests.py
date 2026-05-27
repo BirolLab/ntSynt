@@ -68,3 +68,10 @@ def test_cleanup():
         cmd = shlex.split(f"pigz {infile}")
         ret_code = subprocess.call(cmd)
         assert ret_code == 0
+
+def test_3_genomes_gz():
+    "Testing ntSynt with three input gzipped genomes"
+    genome1, genome2, genome3 = "celegans-chrII-III.fa.gz", "celegans-chrII-III.A.fa.gz", "celegans-chrII-III.B.fa.gz"
+    launch_ntSynt(genome1, genome2, genome3, k=20, prefix="celegans-A-B-ntSynt_gz", indel=500, merge=3000)
+    are_expected_blocks("celegans-A-B-ntSynt_gz.synteny_blocks.tsv",
+                        "expected_result/celegans-A-B-ntSynt.synteny_blocks.tsv")
