@@ -134,12 +134,12 @@ class NtSyntSynteny(ntjoin.Ntjoin):
                                     assembly_block.get_block_end()))
 
         return synteny_beds
-    
+
     def prepare_fasta_for_bedtools(self, fa_filename_full):
         """If fasta is gzipped, decompress to a temp file and return its path.
         Returns (path, is_temp) — caller should delete path if is_temp is True."""
         if fa_filename_full.endswith(".gz"):
-            tmp = tempfile.NamedTemporaryFile(suffix=".fa", delete=False, dir=os.getcwd())
+            tmp = tempfile.NamedTemporaryFile(suffix=".fa", delete=False, dir=os.getcwd()) # pylint: disable=consider-using-with
             with gzip.open(fa_filename_full, "rb") as f_in:
                 shutil.copyfileobj(f_in, tmp)
             tmp.close()
