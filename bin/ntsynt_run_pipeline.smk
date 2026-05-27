@@ -52,7 +52,7 @@ rule faidx:
     params: benchmarking=expand("{benchmark_path} -o {{file}}.faidx.time", benchmark_path=benchmark_path) if benchmark else []
     threads: 1
     run:
-        if input.fa.endswith("gz"):
+        if input.fa.endswith(".gz"):
             shell("{params.benchmarking} gunzip -c {input.fa} | samtools faidx -o {output} -")
         else:
             shell("{params.benchmarking} samtools faidx -o {output} {input.fa}")
