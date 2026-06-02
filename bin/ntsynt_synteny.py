@@ -455,6 +455,7 @@ class NtSyntSynteny(ntjoin.Ntjoin):
         "Merge collinear blocks that are less than threshold apart, and are not indels"
         out_blocks = []
         curr_block = blocks[0]
+        curr_block.broken_reason = None
         for block in blocks[1:]:
             orientations = True # Are the orientations all the same?
             contig_id = True # Are the contig IDs all the same?
