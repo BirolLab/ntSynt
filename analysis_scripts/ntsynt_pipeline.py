@@ -35,6 +35,7 @@ python run_pipeline.py ... --forcerun run_ntsynt plot_divergences
 import argparse
 import datetime
 import os
+import subprocess
 import sys
 from pathlib import Path
 
@@ -44,7 +45,7 @@ from pathlib import Path
 # ---------------------------------------------------------------------------
 
 SNAKEFILE = Path(__file__).parent / "Snakefile"
-SCRIPTS_DIR = Path(__file__).parent / "scripts"
+SCRIPTS_DIR = Path(__file__).parent
 
 
 def parse_args() -> argparse.Namespace:
@@ -83,14 +84,7 @@ def parse_args() -> argparse.Namespace:
             "Defaults to the capitalised form of --group if not supplied."
         ),
     )
-    req.add_argument(
-        "--block-stats-script", required=True, metavar="PATH",
-        help="Path to denovo_synteny_block_stats.py (from the ntSynt repo).",
-    )
-    req.add_argument(
-        "--mx-stats-script", required=True, metavar="PATH",
-        help="Path to analyze_mx.py (minimizer stats script).",
-    )
+
 
     # ------------------------------------------------------------------
     # Optional ntSynt / analysis parameters
@@ -105,13 +99,13 @@ def parse_args() -> argparse.Namespace:
     opt.add_argument("--tree", default="", metavar="NEWICK",
                      help="Optional Newick tree file for ntSynt-viz. Omit to skip.")
     opt.add_argument(
-        "--date", required=True, metavar="YYMMDD",
-        help="Date string used to name the download directory (e.g. '250528').",
-        default=datetime.datetime.now().strftime("%y%m%d"),
+        "--date", metavar="YYYY-MM-DD",
+        help="Date string used to name the download directory.",
+        default=datetime.datetime.now().strftime("%y-%m-%d"),
         required=False
     )
     opt.add_argument("--ntsynt-viz_ribbon-adjust", type=float, default=0.2,
-                     help="Adjustment factor for ntSynt-viz ribbons. Increase if ribbon plot labels are cut off. [0.2]")
+                     help="Adjustment factor for ntSynt-viz ribbons. Increase if ribbon plot labels are cut off.")
     # ------------------------------------------------------------------
     # Snakemake execution options
     # ------------------------------------------------------------------
@@ -147,13 +141,7 @@ def build_config(args: argparse.Namespace) -> dict:
         "ntsynt_w":          args.ntsynt_w,
         "treefile":          args.tree,
         "ntsynt_viz_ribbon_adjust": args.ntsynt_viz_ribbon_adjust,
-        "scripts": {
-            "block_stats":              str(Path(args.block_stats_script).resolve()),
-            "mx_stats":                 str(Path(args.mx_stats_script).resolve()),
-            # Bundled scripts — always resolved relative to this driver file
-            "extract_synteny_regions":  str(SCRIPTS_DIR / "extract_synteny_regions.py"),
-            "plot_dists_r":             str(SCRIPTS_DIR / "plot_dists.R"),
-        },
+        "scripts_dir":     str(SCRIPTS_DIR.resolve()),
     }
 
 
@@ -162,8 +150,6 @@ def validate_paths(args: argparse.Namespace) -> None:
     errors = []
     for label, path in [
         ("--accessions",        args.accessions),
-        ("--block-stats-script", args.block_stats_script),
-        ("--mx-stats-script",   args.mx_stats_script),
     ]:
         if not Path(path).exists():
             errors.append(f"  {label}: file not found: {path}")
@@ -178,6 +164,40 @@ def validate_paths(args: argparse.Namespace) -> None:
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
+
+def build_snakemake_cmd(args: argparse.Namespace, config: dict) -> list[str]:
+    cmd = [
+        "snakemake",
+        "--snakefile", str(SNAKEFILE),
+        "--cores",     str(args.cores),
+        "--printshellcmds",
+        "--nolock",
+    ]
+
+    # One --config flag followed by all key=value pairs as separate tokens
+    import json
+    config_pairs = []
+    for k, v in config.items():
+        if isinstance(v, dict):
+            config_pairs.append(f"{k}={json.dumps(v)}")
+        else:
+            config_pairs.append(f"{k}={v}")
+
+    if config_pairs:
+        cmd += ["--config"] + config_pairs
+
+    if args.dry_run:
+        cmd.append("--dry-run")
+
+    for rule in (args.forcerun or []):
+        cmd += ["--forcerun", rule]
+
+    for rule in (args.until or []):
+        cmd += ["--until", rule]
+
+    cmd += args.snakemake_args
+
+    return cmd
 
 def main() -> None:
     args = parse_args()
@@ -206,20 +226,11 @@ def main() -> None:
     if args.dry_run:
         print("DRY RUN — no files will be created.\n")
 
-    success = smk_module.snakemake(
-        snakefile   = str(SNAKEFILE),
-        config      = config,
-        cores       = args.cores,
-        dryrun      = args.dry_run,
-        forcerun    = args.forcerun or [],
-        until       = args.until or [],
-        printshellcmds = True,
-        # Surface snakemake's own output directly to the terminal
-        quiet       = False,
-    )
-
-    if not success:
-        sys.exit(1)
+    cmd = build_snakemake_cmd(args, config)
+    print("Running:", " ".join(cmd), flush=True)
+ 
+    result = subprocess.run(cmd)
+    sys.exit(result.returncode)
 
 
 if __name__ == "__main__":

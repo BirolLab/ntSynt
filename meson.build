@@ -27,6 +27,7 @@ endif
 # Source files and scripts
 subdir('src')
 subdir('bin')
+subdir('analysis_scripts')
 
 # Install required files from ntJoin submodule
 meson.add_install_script('scripts/install-ntjoin')

@@ -10,8 +10,8 @@ library(tidyr)
 col_names <- c("query", "reference", "mash_dist", "p_value", "matching_hashes")
 
 full_genome  <- read.table("full_assemblies_dist.tsv", col.names = col_names)
-syntenic     <- read.table("synteny_dists.tsv",        col.names = col_names)
-non_syntenic <- read.table("non_synteny_dists.tsv",    col.names = col_names)
+syntenic     <- read.table("syntenic_dists.tsv",        col.names = col_names)
+non_syntenic <- read.table("non_syntenic_dists.tsv",    col.names = col_names)
 
 # Helper: strip path and suffixes to get a clean genome accession ID
 clean_name <- function(x) {
@@ -100,7 +100,7 @@ colour_vals <- c("Full genome"  = "#238B45",
                  "Syntenic"     = "#2166AC",
                  "Non-syntenic" = "#B2182B")
 
-p <- ggplot(combined, aes(x = region, y = mash_dist, fill = region)) +
+p <- ggplot(combined, aes(x = region, y = mash_dist*100, fill = region)) +
 
   # Boxplot (outliers hidden — raw data shown below)
   geom_boxplot(outlier.shape = NA, alpha = 0.6, width = 0.45) +
@@ -112,7 +112,7 @@ p <- ggplot(combined, aes(x = region, y = mash_dist, fill = region)) +
   scale_fill_manual(values   = fill_vals) +
   scale_colour_manual(values = colour_vals) +
 
-  labs(x = NULL, y = "Mash distance") +
+  labs(x = NULL, y = "Mash distance (%)") +
 
   theme_bw(base_size = 13) +
   theme(legend.position = "none")

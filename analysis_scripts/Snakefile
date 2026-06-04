@@ -1,3 +1,4 @@
+#!/usr/bin/env snakemake -s
 """
 Snakemake pipeline: multi-genome synteny analysis
 ==================================================
@@ -32,9 +33,7 @@ Steps
   18. name_conversion       – auto-generated from accessions TSV
 """
 
-import os, glob
-
-configfile: "config.yaml"
+import os, glob, sys, shutil
 
 # ---------------------------------------------------------------------------
 # Convenience aliases
@@ -53,15 +52,14 @@ TAX_VALUE = config.get("tax_value", GROUP_CAP)
 FPR       = config["fpr"]
 K         = config["ntsynt_k"]
 W         = config["ntsynt_w"]
-SCRIPTS   = config["scripts"]           # dict: label -> path
+SCRIPTS   = config["scripts_dir"]           
 TREEFILE  = config.get("treefile", "")
 NTSYNT_VIZ_RIBBON_ADJUST = config.get("ntsynt_viz_ribbon_adjust", 0.2)
 
 ASSEMBLY_DIR  = f"{DATE}_assemblies"
 NCBI_DATA_DIR = f"{ASSEMBLY_DIR}/{GROUP_LOWERCASE}_assemblies/ncbi_dataset/data"
-NTSYNT_DIR    = f"ntsynt_run"
 MASH_DIR      = f"mash"
-VIZ_DIR       = f"{NTSYNT_DIR}/ntsynt-viz"
+VIZ_DIR       = f"ntsynt-viz"
 
 # ntSynt output file stem (matches ntSynt naming convention)
 NTSYNT_STEM = f"ntSynt.k{K}.w{W}"
@@ -72,8 +70,8 @@ BLOCKS_TSV  = f"{NTSYNT_STEM}.synteny_blocks.tsv"
 # ---------------------------------------------------------------------------
 
 def get_fastas(_=None):
-    """Return sorted list of *.fna paths under the NCBI data directory."""
-    return sorted(glob.glob(f"{NCBI_DATA_DIR}/**/*.fna", recursive=True))
+    """Return list of *.fna paths under the NCBI data directory."""
+    return [os.path.abspath(f) for f in glob.glob(f"{NCBI_DATA_DIR}/**/*.chr.fa", recursive=True)]
 
 
 def get_fai_list(_=None):
@@ -90,27 +88,30 @@ rule all:
         f"{ASSEMBLY_DIR}/{GROUP_LOWERCASE}_abyss_fac.tsv",
         f"{ASSEMBLY_DIR}/{GROUP_LOWERCASE}_abyss_fac-summary.tsv",
         # Mash
-        f"{MASH_DIR}/full_assemblies.msh",
         f"{MASH_DIR}/full_assemblies_dist.tsv",
         # ntSynt outputs
         BLOCKS_TSV,
         f"{NTSYNT_STEM}.synteny_blocks.stats.tsv",
         f"{NTSYNT_STEM}.mx.stats.tsv",
         # ntSynt-viz
-        f"{VIZ_DIR}/ntsynt_viz.log",
+        f"{VIZ_DIR}/ntsynt_viz.done",
         # Syntenic / non-syntenic FASTAs
-        f"{NTSYNT_DIR}/regions_extracted.done",
+        f"regions_extracted.done",
         # Discontinuity reasons
-        f"{NTSYNT_DIR}/{NTSYNT_STEM}.discontinuity_reasons.tsv",
+        f"{NTSYNT_STEM}.discontinuity_reasons.tsv",
         # Divergence plots
         f"{MASH_DIR}/mash_divergence_boxplot.pdf",
+        # HTML report,
+        f"{GROUP_LOWERCASE}_ntsynt_report.html"
+
+
 
 
 # ===========================================================================
 # 1. Download assemblies
 # ===========================================================================
 
-rule download_assemblies:
+rule download_assemblies_filter:
     """
     Filter the input TSV to the desired taxonomic group, then download assemblies.
 
@@ -121,9 +122,7 @@ rule download_assemblies:
     input:
         tsv = config["accessions_tsv"],
     output:
-        done    = f"{ASSEMBLY_DIR}/download.done",
         acc_tsv = f"{ASSEMBLY_DIR}/{GROUP_LOWERCASE}_biogenomes.tsv",
-        accfile = f"{ASSEMBLY_DIR}/{GROUP_LOWERCASE}_accessions.txt",
     params:
         family_low = GROUP_LOWERCASE,
         outdir     = ASSEMBLY_DIR,
@@ -141,24 +140,68 @@ rule download_assemblies:
             ${params.tax_level} == "{params.tax_value}"
         ' {input.tsv} > {output.acc_tsv}
 
-        n_rows=$(mlr --tsv count {output.acc_tsv} | tail -n1 | awk -F'	' '{{print $NF}}')
+        n_rows=$(tail -n+2  {output.acc_tsv} |wc -l)
         echo "  Found $n_rows assemblies for {params.tax_level}={params.tax_value}"
         if [ "$n_rows" -eq 0 ]; then
             echo "ERROR: No rows matched. Check --tax-level / --tax-value and your TSV headers." >&2
             exit 1
         fi
+        """
 
+
+rule download_assemblies_extract:
+    input:
+        tsv = config["accessions_tsv"],
+        acc_tsv = rules.download_assemblies_filter.output.acc_tsv
+    output:
+        accfile = f"{ASSEMBLY_DIR}/{GROUP_LOWERCASE}_accessions.txt",
+    params:
+        family_low = GROUP_LOWERCASE,
+        outdir     = ASSEMBLY_DIR,
+        tax_level  = TAX_LEVEL,
+        tax_value  = TAX_VALUE,
+    shell:
+        r"""
         # ------------------------------------------------------------------
         # 2. Extract accessions (dropping empty values).
         # ------------------------------------------------------------------
         mlr --tsv \
             filter '$["Assembly Accession"] != ""' \
-            then filter '${Assembly Level} == "Complete Genome" || ${Assembly Level} == "Chromosome"' \
+            then filter '${{Assembly Level}} == "Complete Genome" || ${{Assembly Level}} == "Chromosome"' \
             then cut -f "Assembly Accession" \
             then label accession \
-            {output.acc_tsv} \
+            {input.acc_tsv} \
             | tail -n +2 > {output.accfile}
+        """
 
+rule download_assemblies_sequence_reports:
+    input: 
+        acc_tsv = rules.download_assemblies_extract.output.accfile
+    output:
+        seq_report = f"{ASSEMBLY_DIR}/{GROUP_LOWERCASE}_sequence-reports.tsv"
+    shell:
+        r"""
+        datasets summary genome accession --inputfile {input.acc_tsv} \
+            --report sequence --assembly-level chromosome,complete \
+            --as-json-lines \
+        |dataformat tsv genome-seq --fields accession,chr-name,genbank-seq-acc,mol-type,role \
+            > {output.seq_report}
+        """
+
+rule download_assemblies_ncbi:
+    input:
+        tsv = config["accessions_tsv"],
+        acc_tsv = rules.download_assemblies_filter.output.acc_tsv,
+        accfile = rules.download_assemblies_extract.output.accfile
+    output:
+        done    = f"{ASSEMBLY_DIR}/download.done",
+    params:
+        family_low = GROUP_LOWERCASE,
+        outdir     = ASSEMBLY_DIR,
+        tax_level  = TAX_LEVEL,
+        tax_value  = TAX_VALUE,
+    shell:
+        """
         # ------------------------------------------------------------------
         # 3. Download with NCBI datasets.
         # ------------------------------------------------------------------
@@ -166,16 +209,86 @@ rule download_assemblies:
             --assembly-version latest \
             --include genome \
             --assembly-level complete,chromosome \
-            --inputfile {output.accfile} \
+            --inputfile {input.accfile} \
             --filename {params.outdir}/{params.family_low}_assemblies.zip
 
         unzip -o {params.outdir}/{params.family_low}_assemblies.zip \
               -d {params.outdir}/{params.family_low}_assemblies
         rm -f {params.outdir}/{params.family_low}_assemblies.zip
 
+        # Reset timestamps on all extracted files to avoid Snakemake mtime issues
+        find {params.outdir}/{params.family_low}_assemblies -exec touch {{}} \; 
+
         touch {output.done}
         """
+# ===========================================================================
+# Filter assemblies to chromosome sequences only
+# ===========================================================================
 
+rule filter_assemblies_to_chromosomes:
+    """
+    For each downloaded assembly, filter the sequence report to
+    assembled-molecule chromosomes, then extract those sequences
+    with seqtk subseq into <accession>.chr.fa alongside the original *.fna.
+    Also writes a per-accession <accession>.chromosomes.tsv for reference.
+    """
+    input:
+        accfile    = rules.download_assemblies_extract.output.accfile,
+        seq_report = rules.download_assemblies_sequence_reports.output.seq_report,
+        done       = f"{ASSEMBLY_DIR}/download.done",
+    output:
+        done = f"{ASSEMBLY_DIR}/filter_chromosomes.done",
+    params:
+        fasta_root = f"{ASSEMBLY_DIR}/{GROUP_LOWERCASE}_assemblies/ncbi_dataset/data",
+    log:
+        f"{ASSEMBLY_DIR}/filter_chromosomes.log",
+    shell:
+        r"""
+        set -euo pipefail
+
+        while read -r accession; do
+            accession=${{accession%$'\r'}}   # strip Windows line endings
+            echo "Processing $accession" | tee -a {log}
+
+            fasta=$(find {params.fasta_root}/${{accession}} -name "*.fna")
+            count_fasta=$(echo "${{fasta}}" | wc -l)
+
+            if [ "${{count_fasta}}" -ne 1 ]; then
+                echo "ERROR: ${{count_fasta}} FASTA files found for $accession, expected 1." \
+                    | tee -a {log}
+                exit 1
+            fi
+
+            # Filter sequence report to assembled-molecule chromosomes for this accession,
+            # saving a per-accession TSV for reference
+            chr_tsv={params.fasta_root}/${{accession}}/${{accession}}.chromosomes.tsv
+            mlr --tsv \
+                filter -s my_acc="$accession" '$["Assembly Accession"] == @my_acc' \
+                then filter '$Role == "assembled-molecule" && $["Molecule type"] == "Chromosome"' \
+                {input.seq_report} > "$chr_tsv"
+
+            n_chr=$(tail -n +2 "$chr_tsv" | wc -l)
+            echo "  Found ${{n_chr}} chromosome sequence(s)" | tee -a {log}
+
+            if [ "${{n_chr}}" -eq 0 ]; then
+                echo "  WARNING: no chromosome sequences found for $accession, skipping." \
+                    | tee -a {log}
+                continue
+            fi
+
+            # Extract chromosome sequences using seqtk subseq
+            out={params.fasta_root}/${{accession}}/${{accession}}.chr.fa
+            seqtk subseq "$fasta" \
+                <(mlr --tsv cut -f "GenBank seq accession" "$chr_tsv" | tail -n +2) \
+                > "$out"
+
+            samtools faidx "$out"
+            echo "  Written: $out" | tee -a {log}
+
+        done < {input.accfile}
+
+        touch {output.done}
+        """
 
 # ===========================================================================
 # 2. Index all FASTAs with samtools faidx
@@ -183,17 +296,17 @@ rule download_assemblies:
 
 checkpoint index_fastas:
     """
-    Index every *.fna under the NCBI data directory.
+    Index every *.chr.fa under the NCBI data directory.
     Using a checkpoint so downstream rules can glob the actual file list.
     """
     input:
-        f"{ASSEMBLY_DIR}/download.done",
+        f"{ASSEMBLY_DIR}/filter_chromosomes.done",
     output:
         done = f"{ASSEMBLY_DIR}/index_fastas.done",
     shell:
         r"""
         set -euo pipefail
-        find {NCBI_DATA_DIR} -name '*.fna' | while read fa; do
+        find {NCBI_DATA_DIR} -name '*.chr.fa' | while read fa; do
             if [ ! -f "$fa.fai" ]; then
                 samtools faidx "$fa"
             fi
@@ -215,7 +328,7 @@ rule list_fastas:
         fastas = get_fastas()
         if not fastas:
             raise ValueError(
-                f"No *.fna files found under {NCBI_DATA_DIR}. "
+                f"No *.chr.fa files found under {NCBI_DATA_DIR}. "
                 "Check that download_assemblies completed successfully."
             )
         with open(output.fasta_list, "w") as fh:
@@ -261,13 +374,13 @@ rule make_name_conversion:
         while IFS= read -r fa; do
             base=$(basename "$fa")
             # Extract GCA_/GCF_ accession prefix from filename
-            acc=$(echo "$base" | sed -E 's/(GC[AF]_[0-9]+\.[0-9]+).*/\1/')
+            acc=$(echo "${{base}}" | sed -E 's/(GC[AF]_[0-9]+\.[0-9]+).*/\1/')
             # Look up display name with mlr; fall back to accession if not found
-            species=$(mlr --tsv filter '$["Assembly Accession"] == "'"$acc"'"' \
+            species=$(mlr --tsv filter -s acc=${{acc}} '${{Assembly_Accession}} == @acc' \
                           then cut -f "species" \
                           {output.name_conv}.acc_map.tmp \
                           | tail -n +2 | head -n 1)
-            echo "${base}\t${species}"
+            echo -e "${{base}}\t${{species}}"
         done < {input.fasta_list} > {output.name_conv}
 
         rm -f {output.name_conv}.acc_map.tmp
@@ -286,7 +399,7 @@ rule abyss_fac:
     shell:
         r"""
         set -euo pipefail
-        abyss-fac --tsv $(cat {input.fasta_list} | tr "\n" " ") > {output.stats}
+        abyss-fac $(cat {input.fasta_list} | tr "\n" " ") > {output.stats}
         """
 
 rule abyss_fac_stats:
@@ -296,7 +409,8 @@ rule abyss_fac_stats:
         summary = f"{ASSEMBLY_DIR}/{GROUP_LOWERCASE}_abyss_fac-summary.tsv",
     shell:
         r"""
-        mlr --tsv stats1 -a min,max -f n,sum \
+        mlr --tsv stats1 -a min,max,count -f n,sum \
+            then cut -o -f n_count,n_min,n_max,sum_min,sum_max \
             {input.stats} > {output.summary}
         """
 
@@ -324,12 +438,12 @@ rule max_mash_dist:
         dist = f"{MASH_DIR}/full_assemblies_dist.tsv",
     output:
         max_dist = f"{MASH_DIR}/max_mash_dist.txt",
-    run:
-        max_d = $(cat {input.dist} | cut -f3 | sort -nr | head -n1)
-        with open(output.max_dist, "w") as fh:
-            fh.write(f"{max_d*100}\n")
-        print(f"  Max mash distance: {max_d}")
-
+    shell:
+        r"""
+        max_d=$(awk 'BEGIN{{max=0}} {{if($3>max) max=$3}} END{{printf "%.2f", max*100}}' {input.dist})
+        echo $max_d > {output.max_dist}
+        echo "  Max mash distance: ${{max_d}}"
+        """
 
 # ===========================================================================
 # 8. Run ntSynt
@@ -341,22 +455,22 @@ rule run_ntsynt:
         max_dist   = f"{MASH_DIR}/max_mash_dist.txt",
     output:
         blocks = BLOCKS_TSV,
-        log    = f"ntsynt.log",
+    log:
+        f"ntsynt.log",
     params:
         fpr   = FPR,
-        conda = CONDA_ENV,
     shell:
         r"""
         set -euo pipefail
         divergence=$(cat {input.max_dist})
         /usr/bin/time -pv ntSynt \
             --fastas_list {input.fasta_list} \
-            -d "$divergence" \
+            -d ${{divergence}} \
             --fpr {params.fpr} \
             -k {K} \
             -w {W} \
-            --benchmark \
-            &> ntsynt.log
+            --benchmark
+            &> {log}
         """
 
 
@@ -371,10 +485,10 @@ rule ntsynt_block_stats:
     output:
         stats = f"{NTSYNT_STEM}.synteny_blocks.stats.tsv",
     params:
-        script = SCRIPTS["block_stats"],
+        script = f"{SCRIPTS}/denovo_synteny_block_stats.py",
     shell:
         r"""
-        fais=$(find {NCBI_DATA_DIR} -name '*.fna.fai' | tr "\n" " ")
+        fais=$(find {NCBI_DATA_DIR} -name '*.chr.fa.fai' | tr "\n" " ")
         python3 {params.script} \
             --tsv {input.blocks} \
             --fai $fais \
@@ -393,7 +507,7 @@ rule ntsynt_mx_stats:
         stats   = f"{NTSYNT_STEM}.mx.stats.tsv",
         mx_list = f"mx_files.txt",
     params:
-        script = SCRIPTS["mx_stats"],
+        script = f"{SCRIPTS}/analyze_mx.py",
         k      = K,
         w      = W,
     shell:
@@ -420,25 +534,42 @@ rule run_ntsynt_viz:
         name_conv = f"{ASSEMBLY_DIR}/{GROUP_LOWERCASE}_name_conversion.tsv",
         done      = f"{ASSEMBLY_DIR}/index_fastas.done",
     output:
-        log = f"{VIZ_DIR}/ntsynt_viz.log",
+        links = f"{VIZ_DIR}/{GROUP_LOWERCASE}.sequence_lengths.sorted.tsv",
+        done = f"{VIZ_DIR}/ntsynt_viz.done",
+        png = f"{VIZ_DIR}/{GROUP_LOWERCASE}_ribbon-plot.png"
+    log:
+        f"ntsynt_viz.log",
     params:
         prefix   = GROUP_LOWERCASE,
         treeflag = f"--tree {TREEFILE}" if TREEFILE else "",
         ribbon_adjust = NTSYNT_VIZ_RIBBON_ADJUST,
-    shell:
+    run:
+        shell(
         """
         set -euo pipefail
         mkdir -p {VIZ_DIR} && cd {VIZ_DIR}
-        find ../{NCBI_DATA_DIR} -name '*.fna.fai' > fais.txt
-        ntsynt_viz.py --blocks {input.blocks} \
+        find ../{NCBI_DATA_DIR} -name '*.chr.fa.fai' > fais.txt
+        """
+        )
+        with open(f"{VIZ_DIR}/fais.txt", 'r') as f:
+            lines = f.readlines()
+            num_assemblies = len(lines)
+        height = max(min(num_assemblies * 2, 75), 20)
+        shell("""
+        cd {VIZ_DIR}
+        ntsynt_viz.py --blocks ../{input.blocks} \
             --fai fais.txt \
             --name_conversion ../{input.name_conv} \
             --prefix {params.prefix} \
             --normalize \
             --ribbon_adjust {params.ribbon_adjust} \
+            --height {height}
             {params.treeflag} \
-            &> ntsynt_viz.log
+            &> {log}
+        cd ../
+        touch {output.done}
         """
+        )
 
 
 # ===========================================================================
@@ -455,9 +586,9 @@ rule extract_synteny_regions:
         blocks     = BLOCKS_TSV,
         fasta_list = f"{ASSEMBLY_DIR}/{GROUP_LOWERCASE}_fasta_list.txt",
     output:
-        done = f"{NTSYNT_DIR}/regions_extracted.done",
+        done = "regions_extracted.done",
     params:
-        script  = SCRIPTS["extract_synteny_regions"],
+        script  = f"{SCRIPTS}/extract_synteny_regions.py",
         regions = f"synteny_regions",
     shell:
         r"""
@@ -466,7 +597,7 @@ rule extract_synteny_regions:
         fastas=$(cat {input.fasta_list} | tr "\n" " ")
         python3 {params.script} \
             --synteny {input.blocks} \
-            --fastas "${fastas}" \
+            --fastas ${{fastas}} \
             --outdir {params.regions}
         touch {output.done}
         """
@@ -476,14 +607,15 @@ rule extract_synteny_regions:
 # 13. Mash on syntenic / non-syntenic regions
 # ===========================================================================
 
+rule mash_regions:
     wildcard_constraints:
         region_type = "syntenic|non_syntenic",
     input:
-        done = f"{NTSYNT_DIR}/regions_extracted.done",
+        done = f"regions_extracted.done",
     output:
         dist = f"{MASH_DIR}/{{region_type}}_dists.tsv",
     params:
-        regions = f"{NTSYNT_DIR}/regions",
+        regions = f"synteny_regions",
         threads = lambda wildcards, threads: threads,
     threads: 4
     shell:
@@ -492,8 +624,9 @@ rule extract_synteny_regions:
         mkdir -p {MASH_DIR}
 
         # Build a temporary file list for this region type
-        fa_list=$({params.regions}/*.{wildcards.region_type}.fa)
-        mash triangle -p {params.threads} -E -l "$fa_list" > {output.dist}
+        fa_list=$(ls {params.regions}/*.{wildcards.region_type}.fa)
+        echo ${{fa_list}}
+        mash triangle -p {params.threads} -E ${{fa_list}} > {output.dist}
         """
 
 
@@ -510,9 +643,11 @@ rule discontinuity_reasons:
     shell:
         r"""
         set -euo pipefail
-        mlr --tsv --implicit-csv-header label block_id,genome,chrom,start,end,strand,n_mx,discontinuity_reason \
+        cat {input.blocks} | mlr --tsv --implicit-csv-header label block_id,genome,chrom,start,end,strand,n_mx,discontinuity_reason \
+            then uniq -g discontinuity_reason,block_id  \
             then stats1 -a count -f discontinuity_reason -g discontinuity_reason \
             then sort -nr discontinuity_reason_count \
+            then filter '$discontinuity_reason != "None"' \
         > {output.tsv}
         """
 
@@ -523,18 +658,53 @@ rule discontinuity_reasons:
 
 rule plot_divergences:
     input:
-        full        = f"{MASH_DIR}/full_assemblies_dist.tsv",
+        full_dists  = f"{MASH_DIR}/full_assemblies_dist.tsv",
         syntenic    = f"{MASH_DIR}/syntenic_dists.tsv",
         nonsyntenic = f"{MASH_DIR}/non_syntenic_dists.tsv",
-        script      = SCRIPTS["plot_dists_r"],
     output:
         pdf = f"{MASH_DIR}/mash_divergence_boxplot.pdf",
         png = f"{MASH_DIR}/mash_divergence_boxplot.png",
     params:
         mash_dir = MASH_DIR,
+        script      = f"{SCRIPTS}/plot_dists.R",
     shell:
         r"""
         set -euo pipefail
         cd {params.mash_dir}
-        Rscript {input.script}
+        Rscript {params.script}
+        """
+
+# ===========================================================================
+# HTML report
+# ===========================================================================
+
+rule generate_report:
+    """
+    Collate pipeline outputs into a single self-contained HTML report.
+    All tables and images are embedded as base64 — no external files needed.
+    """
+    input:
+        abyss_fac     = f"{ASSEMBLY_DIR}/{GROUP_LOWERCASE}_abyss_fac-summary.tsv",
+        block_stats   = f"{NTSYNT_STEM}.synteny_blocks.stats.tsv",
+        ribbon_plot   = f"{VIZ_DIR}/{GROUP_LOWERCASE}_ribbon-plot.png",
+        discontinuity = f"{NTSYNT_STEM}.discontinuity_reasons.tsv",
+        mash_plot     = f"{MASH_DIR}/mash_divergence_boxplot.png",
+    output:
+        html = f"{GROUP_LOWERCASE}_ntsynt_report.html",
+    params:
+        script = f"{SCRIPTS}/generate_report.py",
+        group  = GROUP_LOWERCASE,
+    log:
+        f"{GROUP_LOWERCASE}_ntsynt_report.log",
+    shell:
+        r"""
+        python3 {params.script} \
+         --abyss-fac     {input.abyss_fac} \
+         --block-stats   {input.block_stats} \
+          --ribbon-plot   {input.ribbon_plot} \
+          --discontinuity {input.discontinuity} \
+          --mash-plot     {input.mash_plot} \
+           --group         {params.group} \
+           --output        {output.html} \
+           &> {log}
         """
