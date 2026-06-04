@@ -32,6 +32,7 @@ visualisations.
 * ntSynt
 * ntSynt-viz
 * seqtk
+* weasyprint
 
 ---
 

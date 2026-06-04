@@ -101,8 +101,9 @@ rule all:
         f"{NTSYNT_STEM}.discontinuity_reasons.tsv",
         # Divergence plots
         f"{MASH_DIR}/mash_divergence_boxplot.pdf",
-        # HTML report,
-        f"{GROUP_LOWERCASE}_ntsynt_report.html"
+        # HTML and PDF report,
+        f"{GROUP_LOWERCASE}_ntsynt_report.html",
+        f"{GROUP_LOWERCASE}_ntsynt_report.pdf",
 
 
 
@@ -691,11 +692,11 @@ rule generate_report:
         mash_plot     = f"{MASH_DIR}/mash_divergence_boxplot.png",
     output:
         html = f"{GROUP_LOWERCASE}_ntsynt_report.html",
+        pdf = f"{GROUP_LOWERCASE}_ntsynt_report.pdf",
     params:
         script = f"{SCRIPTS}/generate_report.py",
         group  = GROUP_LOWERCASE,
-    log:
-        f"{GROUP_LOWERCASE}_ntsynt_report.log",
+        prefix = f"{GROUP_LOWERCASE}_ntsynt_report"
     shell:
         r"""
         python3 {params.script} \
@@ -705,6 +706,5 @@ rule generate_report:
           --discontinuity {input.discontinuity} \
           --mash-plot     {input.mash_plot} \
            --group         {params.group} \
-           --output        {output.html} \
-           &> {log}
+           --output        {params.prefix} 
         """

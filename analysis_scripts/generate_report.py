@@ -479,7 +479,76 @@ def build_report(args: argparse.Namespace) -> str:
         date=date_str,
         sections="\n".join(sections_html),
     )
+PDF_CSS = """
+@page {
+    size: A4 portrait;
+    margin: 1.5cm;
+}
 
+html {
+    font-size: 11px;
+}
+
+main {
+    max-width: 100%;
+}
+
+header, nav {
+    page-break-after: avoid;
+}
+
+.report-section {
+    page-break-inside: auto;
+}
+
+img {
+    max-width: 100% !important;
+}
+
+/* Mash divergence plot — narrower since it's a portrait-style boxplot */
+#divergence .figure-wrap {
+    max-width: 100%;
+}
+
+#divergence .figure-wrap img {
+    width: 100%;
+}
+
+/* Keep ribbon plot header and image on the same page */
+#ribbon {
+    page-break-inside: avoid;
+}
+
+/* Ribbon plot — full width since it's wide by nature */
+#ribbon .figure-wrap {
+    max-width: 100%;
+    width: 100%;
+    page-break-before: avoid;
+    margin-left: -7.5%;
+}
+
+#ribbon .figure-wrap img {
+    width: 100%;
+}
+
+"""
+
+
+def save_pdf(html_content: str, pdf_path: str) -> None:
+    """Render the HTML report to PDF using WeasyPrint."""
+    try:
+        from weasyprint import HTML, CSS
+        from weasyprint.text.fonts import FontConfiguration
+        font_config = FontConfiguration()
+        html_obj = HTML(string=html_content)
+        css = CSS(string=PDF_CSS, font_config=font_config)
+        html_obj.write_pdf(pdf_path, stylesheets=[css], font_config=font_config)
+    except ImportError:
+        print(
+            "WARNING: WeasyPrint not installed — skipping PDF output.\n"
+            "Install with: mamba install -c conda-forge weasyprint",
+            file=sys.stderr,
+        )
 
 # ---------------------------------------------------------------------------
 # CLI
@@ -493,15 +562,18 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--discontinuity", metavar="TSV",  help="Block discontinuity reasons TSV")
     p.add_argument("--mash-plot",     metavar="PNG",  help="Mash divergence boxplot PNG")
     p.add_argument("--group",         required=True,  help="Taxonomic group name (used in title)")
-    p.add_argument("--output",        required=True,  metavar="HTML", help="Output HTML file path")
+    p.add_argument("--output",        required=True,  metavar="HTML", help="Output prefix file path")
     return p.parse_args()
 
 
 def main() -> None:
     args = parse_args()
     report = build_report(args)
-    Path(args.output).write_text(report, encoding="utf-8")
-    print(f"Report written to {args.output}")
+    html_path = Path(args.output).with_suffix(".html")
+    pdf_path = str(Path(args.output).with_suffix(".pdf"))
+    html_path.write_text(report, encoding="utf-8")
+    save_pdf(report, pdf_path)
+    print(f"Reports written to {str(html_path)} and {pdf_path}.")
 
 
 if __name__ == "__main__":
