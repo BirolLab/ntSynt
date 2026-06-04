@@ -564,7 +564,8 @@ rule run_ntsynt_viz:
             --prefix {params.prefix} \
             --normalize \
             --ribbon_adjust {params.ribbon_adjust} \
-            --height {height}
+            --height {height} \
+            --annotate-genome-info \
             {params.treeflag} \
             &> {log}
         cd ../
