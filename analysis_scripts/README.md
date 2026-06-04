@@ -107,49 +107,8 @@ python run_pipeline.py \
     --group      lucinidae \
     --tax-level  family \
     --tax-value  Lucinidae \
-    --cores 16
 ```
 
-### Dry run (preview rules without executing)
-
-```bash
-python run_pipeline.py \
-    --accessions lucinidae_assemblies.tsv \
-    --group      lucinidae \
-    --block-stats-script /path/to/denovo_synteny_block_stats.py \
-    --mx-stats-script    /path/to/analyze_mx.py \
-    --dry-run
-```
-
-### With an optional species tree for ntSynt-viz
-
-```bash
-python run_pipeline.py \
-    --accessions lucinidae_assemblies.tsv \
-    --group      lucinidae \
-    --block-stats-script /path/to/denovo_synteny_block_stats.py \
-    --mx-stats-script    /path/to/analyze_mx.py \
-    --tree       lucinidae.nwk \
-    --cores 16
-```
-
-### Filtering at a different taxonomic level
-
-The `--tax-level` and `--tax-value` flags control which rows of the input TSV
-are downloaded. The default is `family`, but any column present in the TSV can
-be used:
-
-```bash
-# Run on an entire order
-python run_pipeline.py \
-    --accessions biogenome_assemblies.tsv \
-    --group      veneroida \
-    --tax-level  order \
-    --tax-value  Venerida \
-    --block-stats-script /path/to/denovo_synteny_block_stats.py \
-    --mx-stats-script    /path/to/analyze_mx.py \
-    --cores 16
-```
 
 ### Full argument reference
 
@@ -159,14 +118,11 @@ python run_pipeline.py \
 | `--group` | — | Taxonomic group name, used as output prefix (required) |
 | `--tax-level` | `family` | TSV column name to filter on |
 | `--tax-value` | capitalised `--group` | Value to match in `--tax-level` column (case-insensitive) |
-| `--block-stats-script` | — | Path to `denovo_synteny_block_stats.py` (required) |
-| `--mx-stats-script` | — | Path to `analyze_mx.py` (required) |
 | `--date` | today (`YY-MM-DD`) | Date string used to name the download directory |
 | `--fpr` | `0.025` | Bloom filter false-positive rate for ntSynt |
 | `--ntsynt-k` | `24` | k-mer size for ntSynt |
 | `--ntsynt-w` | `1000` | Minimizer window size for ntSynt |
 | `--tree` | _(none)_ | Newick tree file for ntSynt-viz (optional) |
-| `--conda-env` | `ntsynt` | Conda environment with ntSynt/ntSynt-viz installed |
 | `--cores` | `12` | CPU cores available to Snakemake |
 | `--dry-run` / `-n` | — | Preview rules without executing |
 | `--forcerun` | — | Force re-execution of one or more named rules |
