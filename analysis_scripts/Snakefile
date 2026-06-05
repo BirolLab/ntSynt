@@ -218,7 +218,7 @@ rule download_assemblies_ncbi:
         rm -f {params.outdir}/{params.family_low}_assemblies.zip
 
         # Reset timestamps on all extracted files to avoid Snakemake mtime issues
-        find {params.outdir}/{params.family_low}_assemblies -exec touch {{}} \; 
+        find {params.outdir}/{params.family_low}_assemblies -exec touch {{}} \\; 
 
         touch {output.done}
         """

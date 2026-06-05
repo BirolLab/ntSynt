@@ -39,6 +39,17 @@ def encode_image(path: str) -> str:
         data = base64.b64encode(fh.read()).decode()
     return f"data:image/png;base64,{data}"
 
+def format_genome_size(bp):
+    """Format the genome size, and return the most appropriate units"""
+    if bp >= 1_000_000_000:
+        return f"{bp / 1_000_000_000:.1f}", "Gbp", 1_000_000_000
+    elif bp >= 1_000_000:
+        return f"{bp / 1_000_000:.1f}", "Mbp", 1_000_000
+    elif bp >= 1_000:
+        return f"{bp / 1_000:.1f}", "kbp", 1_000
+    else:
+        return str(bp), "bp", 1
+
 
 def tsv_to_html_table(path: str, table_id: str = "", rename: dict = None) -> str:
     """Read a TSV and return an HTML <table> string.
@@ -259,6 +270,13 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       background: var(--surface2);
     }}
 
+    .table-note {{
+      margin: 0.75rem 0 0 0;
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      font-family: var(--mono);
+    }}
+
     /* --- figures ------------------------------------------------------- */
     .figure-wrap {{
       background: var(--surface);
@@ -352,15 +370,14 @@ def build_report(args: argparse.Namespace) -> str:
 
         n_count   = row["n_count"]
         chr_range = f"{row['n_min']} – {row['n_max']}"
-        # Convert bases to Mbp (1 Mbp = 1,000,000 bp), rounded to 1 decimal
-        size_min  = round(int(row["sum_min"]) / 1_000_000, 1)
-        size_max  = round(int(row["sum_max"]) / 1_000_000, 1)
-        size_range = f"{size_min} – {size_max} Mbp"
+        size_min_val, size_unit, min_divisor = format_genome_size(int(row["sum_min"]))
+
+        size_range = f"{size_min_val} – {int(row['sum_max']) / min_divisor:.1f}"
 
         summary_rows = [
-            ("Number of assemblies",          n_count),
-            ("Range of number of chromosomes",        chr_range),
-            ("Genome size range",              size_range),
+            ("Number of assemblies", n_count),
+            ("Range of number of chromosomes", chr_range),
+            (f"Genome size range ({size_unit})", size_range),
         ]
 
         table_lines = [
@@ -374,7 +391,10 @@ def build_report(args: argparse.Namespace) -> str:
             )
         table_lines.append("</tbody></table>")
 
-        content = f'<div class="table-wrap">{"".join(table_lines)}</div>'
+        content = (
+            f'<div class="table-wrap">{"".join(table_lines)}</div>'
+            f'<p class="table-note">Source: {html.escape(args.abyss_fac)}</p>'
+        )
     else:
         content = "<p><em>abyss-fac summary not found.</em></p>"
     sections_html.append(section("Assembly statistics", content, "assembly-stats"))
@@ -383,8 +403,8 @@ def build_report(args: argparse.Namespace) -> str:
     if args.block_stats and os.path.exists(args.block_stats):
         BLOCK_STATS_COLUMNS = {
             "Number_blocks":            "Number of blocks",
-            "Average_coverage":         "Average synteny coverage",
-            "Coverage_min_genome_size": "Synteny coverage of smallest genome",
+            "Average_coverage":         "Average synteny coverage (%)",
+            "Coverage_min_genome_size": "Synteny coverage of smallest genome (%)",
             "N50_length":               "N50 length of synteny blocks (bp)",
         }
 
@@ -409,7 +429,10 @@ def build_report(args: argparse.Namespace) -> str:
             )
         table_lines.append("</tbody></table>")
 
-        content = f'<div class="table-wrap">{"".join(table_lines)}</div>'
+        content = (
+            f'<div class="table-wrap">{"".join(table_lines)}</div>'
+            f'<p class="table-note">Source: {html.escape(args.block_stats)}</p>'
+        )
     else:
         content = "<p><em>Synteny block stats not found.</em></p>"
     sections_html.append(section("Synteny block statistics", content, "synteny-blocks"))
@@ -439,7 +462,10 @@ def build_report(args: argparse.Namespace) -> str:
             )
         table_lines.append("</tbody></table>")
 
-        content = f'<div class="table-wrap">{"".join(table_lines)}</div>'
+        content = (
+            f'<div class="table-wrap">{"".join(table_lines)}</div>'
+            f'<p class="table-note">Source: {html.escape(args.discontinuity)}</p>'
+        )
     else:
         content = "<p><em>Discontinuity reasons TSV not found.</em></p>"
     sections_html.append(section("Reasons for synteny block discontinuities", content, "discontinuity"))
@@ -454,6 +480,7 @@ def build_report(args: argparse.Namespace) -> str:
             Pairwise mash distances across full-genome, syntenic, and
             non-syntenic regions. Wilcoxon signed-rank test p-value shown
             between syntenic and non-syntenic distributions.
+            Image: {args.mash_plot}
           </figcaption>
         </figure>"""
     else:
@@ -468,6 +495,7 @@ def build_report(args: argparse.Namespace) -> str:
           <img src="{uri}" alt="ntSynt-viz ribbon plot" style="width: 100%;">
           <figcaption>
             ntSynt-viz ribbon plot showing synteny blocks across all assemblies.
+            Image: {args.ribbon_plot}
           </figcaption>
         </figure>"""
     else:
