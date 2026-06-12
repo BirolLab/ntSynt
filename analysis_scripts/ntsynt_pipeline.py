@@ -34,9 +34,9 @@ python run_pipeline.py ... --forcerun run_ntsynt plot_divergences
 
 import argparse
 import datetime
-import os
 import subprocess
 import sys
+import json
 from pathlib import Path
 
 
@@ -49,6 +49,7 @@ SCRIPTS_DIR = Path(__file__).parent
 
 
 def parse_args() -> argparse.Namespace:
+    """Parse CLI arguments."""
     p = argparse.ArgumentParser(
         description="Run the multi-genome synteny analysis pipeline.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
@@ -166,6 +167,7 @@ def validate_paths(args: argparse.Namespace) -> None:
 # ---------------------------------------------------------------------------
 
 def build_snakemake_cmd(args: argparse.Namespace, config: dict) -> list[str]:
+    """Construct the Snakemake command-line invocation as a list of tokens."""
     cmd = [
         "snakemake",
         "--snakefile", str(SNAKEFILE),
@@ -175,7 +177,6 @@ def build_snakemake_cmd(args: argparse.Namespace, config: dict) -> list[str]:
     ]
 
     # One --config flag followed by all key=value pairs as separate tokens
-    import json
     config_pairs = []
     for k, v in config.items():
         if isinstance(v, dict):
@@ -200,18 +201,10 @@ def build_snakemake_cmd(args: argparse.Namespace, config: dict) -> list[str]:
     return cmd
 
 def main() -> None:
+    """Main entry point: parse args, validate, build config, and launch Snakemake."""
     args = parse_args()
     validate_paths(args)
     config = build_config(args)
-
-    # Import snakemake here so the script is importable even if snakemake is
-    # not installed (e.g. during testing / --help).
-    try:
-        import snakemake as smk_module
-    except ImportError:
-        print("ERROR: snakemake Python package is not importable in this environment.",
-              file=sys.stderr)
-        sys.exit(1)
 
     print("=" * 60)
     print("Synteny pipeline  –  effective configuration")
@@ -228,8 +221,8 @@ def main() -> None:
 
     cmd = build_snakemake_cmd(args, config)
     print("Running:", " ".join(cmd), flush=True)
- 
-    result = subprocess.run(cmd)
+
+    result = subprocess.run(cmd, check=False)
     sys.exit(result.returncode)
 
 

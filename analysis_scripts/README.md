@@ -33,6 +33,10 @@ visualisations.
 * ntSynt-viz
 * seqtk
 * weasyprint
+* mafft
+* mashtree 1.4.6 + libnsl
+* iqtree
+* entrez-direct
 
 ---
 

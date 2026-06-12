@@ -33,15 +33,23 @@ from collections import defaultdict
 def run(cmd: str, check: bool = True) -> subprocess.CompletedProcess:
     """Run a shell command and optionally raise on failure."""
     print(f"  [cmd] {cmd}", flush=True)
-    result = subprocess.run(cmd, shell=True, text=True, stderr=subprocess.PIPE)
-    if check and result.returncode != 0:
-        print(f"ERROR: command failed (exit {result.returncode}):\n{result.stderr}",
-              file=sys.stderr)
+    try:
+        result = subprocess.run(
+            cmd,
+            shell=True,
+            text=True,
+            stderr=subprocess.PIPE,
+            check=check,
+        )
+    except subprocess.CalledProcessError as e:
+        # When check=True subprocess raises CalledProcessError; present stderr
+        print(f"ERROR: command failed (exit {e.returncode}):\n{e.stderr}", file=sys.stderr)
         sys.exit(1)
     return result
 
 
 def fai_path(fasta: str) -> str:
+    """Given a FASTA path, return the .fai index path."""
     return fasta + ".fai"
 
 
@@ -75,7 +83,7 @@ def parse_synteny_tsv(tsv_path: str) -> dict:
     """
     blocks = defaultdict(list)
 
-    with open(tsv_path) as fh:
+    with open(tsv_path, 'r', encoding='utf-8') as fh:
         for lineno, line in enumerate(fh, 1):
             line = line.rstrip()
             if not line or line.startswith("#"):
@@ -105,7 +113,7 @@ def parse_synteny_tsv(tsv_path: str) -> dict:
 
 def write_bed(intervals, bed_path: str, genome_file: str) -> None:
     """Write intervals to a BED file. Intervals are assumed non-overlapping."""
-    with open(f"{bed_path}.tmp", "w") as fh:
+    with open(f"{bed_path}.tmp", "w", encoding='utf-8') as fh:
         for chrom, start, end in intervals:
             fh.write(f"{chrom}\t{start}\t{end}\n")
     run(f"bedtools sort -i {bed_path}.tmp -g {genome_file} > {bed_path}")
@@ -126,6 +134,7 @@ def getfasta(fasta: str, bed: str, out_fa: str) -> None:
 # ---------------------------------------------------------------------------
 
 def main() -> None:
+    """Main - extract syntenic and non-syntenic regions for each genome in the TSV."""
     parser = argparse.ArgumentParser(
         description="Extract syntenic and non-syntenic regions per genome assembly."
     )

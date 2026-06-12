@@ -54,6 +54,7 @@ K         = config["ntsynt_k"]
 W         = config["ntsynt_w"]
 SCRIPTS   = config["scripts_dir"]           
 TREEFILE  = config.get("treefile", "")
+MAKE_TREE = True
 NTSYNT_VIZ_RIBBON_ADJUST = config.get("ntsynt_viz_ribbon_adjust", 0.2)
 
 ASSEMBLY_DIR  = f"{DATE}_assemblies"
@@ -207,7 +208,6 @@ rule download_assemblies_ncbi:
         # 3. Download with NCBI datasets.
         # ------------------------------------------------------------------
         datasets download genome accession \
-            --assembly-version latest \
             --include genome \
             --assembly-level complete,chromosome \
             --inputfile {input.accfile} \
@@ -529,11 +529,27 @@ rule ntsynt_mx_stats:
 # 11. ntSynt-viz
 # ===========================================================================
 
+def get_treefile(wildcards):
+    if TREEFILE:
+        return TREEFILE
+    if MAKE_TREE:
+        return f"phylogeny/tree/{GROUP_LOWERCASE}.nwk"
+    return []
+
+rule make_tree:
+    input:
+        fastas = rules.list_fastas.output.fasta_list
+    output:
+        tree = f"phylogeny/tree/{GROUP_LOWERCASE}.nwk"
+    shell:
+        "run_phylogeny.py --group {GROUP_LOWERCASE} --date {DATE}"
+
 rule run_ntsynt_viz:
     input:
         blocks    = BLOCKS_TSV,
         name_conv = f"{ASSEMBLY_DIR}/{GROUP_LOWERCASE}_name_conversion.tsv",
         done      = f"{ASSEMBLY_DIR}/index_fastas.done",
+        treefile = get_treefile,
     output:
         links = f"{VIZ_DIR}/{GROUP_LOWERCASE}.sequence_lengths.sorted.tsv",
         done = f"{VIZ_DIR}/ntsynt_viz.done",
@@ -542,7 +558,7 @@ rule run_ntsynt_viz:
         f"ntsynt_viz.log",
     params:
         prefix   = GROUP_LOWERCASE,
-        treeflag = f"--tree {TREEFILE}" if TREEFILE else "",
+        treeflag = lambda wildcards, input: f"--tree {input.treefile}" if input.treefile else "",
         ribbon_adjust = NTSYNT_VIZ_RIBBON_ADJUST,
     run:
         shell(
