@@ -56,6 +56,7 @@ SCRIPTS   = config["scripts_dir"]
 TREEFILE  = config.get("treefile", "")
 MAKE_TREE = True
 NTSYNT_VIZ_RIBBON_ADJUST = config.get("ntsynt_viz_ribbon_adjust", 0.2)
+NTSYNT_VIZ_RIBBON_PLOT = f"{GROUP_LOWERCASE}_ribbon-plot_tree.png" if MAKE_TREE or TREEFILE else f"{GROUP_LOWERCASE}_ribbon-plot.png"
 
 ASSEMBLY_DIR  = f"{DATE}_assemblies"
 NCBI_DATA_DIR = f"{ASSEMBLY_DIR}/{GROUP_LOWERCASE}_assemblies/ncbi_dataset/data"
@@ -536,6 +537,13 @@ def get_treefile(wildcards):
         return f"phylogeny/tree/{GROUP_LOWERCASE}.nwk"
     return []
 
+def get_treefile_path(wildcards):
+    if TREEFILE:
+        return os.path.abspath(TREEFILE)
+    if MAKE_TREE:
+        return os.path.abspath(f"phylogeny/tree/{GROUP_LOWERCASE}.nwk")
+    return []
+
 rule make_tree:
     input:
         fastas = rules.list_fastas.output.fasta_list
@@ -553,12 +561,12 @@ rule run_ntsynt_viz:
     output:
         links = f"{VIZ_DIR}/{GROUP_LOWERCASE}.sequence_lengths.sorted.tsv",
         done = f"{VIZ_DIR}/ntsynt_viz.done",
-        png = f"{VIZ_DIR}/{GROUP_LOWERCASE}_ribbon-plot.png"
+        out_plot = f"{VIZ_DIR}/{NTSYNT_VIZ_RIBBON_PLOT}"
     log:
         f"ntsynt_viz.log",
     params:
         prefix   = GROUP_LOWERCASE,
-        treeflag = lambda wildcards, input: f"--tree {input.treefile}" if input.treefile else "",
+        treeflag = lambda wildcards, input: (f"--tree {p}" if (p := get_treefile_path(wildcards)) else ""),
         ribbon_adjust = NTSYNT_VIZ_RIBBON_ADJUST,
     run:
         shell(
@@ -704,7 +712,7 @@ rule generate_report:
     input:
         abyss_fac     = f"{ASSEMBLY_DIR}/{GROUP_LOWERCASE}_abyss_fac-summary.tsv",
         block_stats   = f"{NTSYNT_STEM}.synteny_blocks.stats.tsv",
-        ribbon_plot   = f"{VIZ_DIR}/{GROUP_LOWERCASE}_ribbon-plot.png",
+        ribbon_plot   = rules.run_ntsynt_viz.output.out_plot,
         discontinuity = f"{NTSYNT_STEM}.discontinuity_reasons.tsv",
         mash_plot     = f"{MASH_DIR}/mash_divergence_boxplot.png",
     output:
