@@ -56,36 +56,32 @@ def parse_args() -> argparse.Namespace:
     )
 
     # ------------------------------------------------------------------
-    # Required inputs
+    # Main inputs
     # ------------------------------------------------------------------
-    req = p.add_argument_group("required inputs")
+    req = p.add_argument_group("main inputs")
     req.add_argument(
-        "--accessions", required=True, metavar="TSV",
+        "--accessions", required=False, metavar="TSV",
         help=(
-            "TSV listing genome assemblies. Must contain an 'Assembly Accession' "
-            "column. Optional 'Species Name' or 'Organism Name' column is used for "
-            "ntSynt-viz display labels."
+            "TSV listing NCBI genome accessions to use - one per line"
         ),
     )
     req.add_argument(
-        "--group", required=True, metavar="NAME",
-        help="Taxonomic group name, used as a prefix throughout (e.g. 'ichneumonidae').",
+        "--genomes", required=False, metavar="TSV",
+        help=(
+            "TSV listing paths to genome assemblies to analyze - one per line"
+        )
     )
     req.add_argument(
-        "--tax-level", default="family", metavar="COLUMN",
-        help=(
-            "Column name in the accessions TSV to filter on "
-            "(e.g. 'family', 'order', 'class'). Default: 'family'."
-        ),
+        "--prefix", required=True, metavar="NAME",
+        help="Prefix name for genome assemblies (e.g. 'ichneumonidae').",
     )
     req.add_argument(
-        "--tax-value", default=None, metavar="VALUE",
+        "--name-conversions", required=True, metavar="CONVERSIONS",
         help=(
-            "Value to match in --tax-level column (case-sensitive). "
-            "Defaults to the capitalised form of --group if not supplied."
-        ),
+            "TSV file listing name conversions for display purposes. "
+            "Expected columns: accession/assembly base name; new name"
+        )
     )
-
 
     # ------------------------------------------------------------------
     # Optional ntSynt / analysis parameters
@@ -97,14 +93,25 @@ def parse_args() -> argparse.Namespace:
                      help="k-mer size for ntSynt.")
     opt.add_argument("--ntsynt-w", type=int, default=1000,
                      help="Minimizer window size for ntSynt.")
+    opt.add_argument("--make-tree", action="store_true",
+                     help=(
+                         "Automatically generate phylogenetic tree for ribbon plot. "
+                         "If --accessions specified, will look for mitochondrial sequences in these downloaded files. "
+                         "If --mt-genomes supplied, will use those mitochondrial genomes. "
+                         "Otherwise, will use nuclear genomes with Mash + Quicktree. "
+                     ))
+    opt.add_argument("--mt-genomes", required=False, metavar="FASTA",
+                     help=(
+                         "FASTA file containing mitochondrial genomes for all input assemblies. "
+                         "If specified, must also supply a TSV file for converting header names to new names."
+                         ))
+    opt.add_argument("--mt-name-conversions", required=False, metavar="TSV",
+                     help=(
+                         "TSV listing name conversions between mitochondrial genome accessions and assembly names. "
+                         "Expected columns: mt genome accession; new name (matching --name-conversions)"
+                     ))
     opt.add_argument("--tree", default="", metavar="NEWICK",
                      help="Optional Newick tree file for ntSynt-viz. Omit to skip.")
-    opt.add_argument(
-        "--date", metavar="YYYY-MM-DD",
-        help="Date string used to name the download directory.",
-        default=datetime.datetime.now().strftime("%y-%m-%d"),
-        required=False
-    )
     opt.add_argument("--ntsynt-viz_ribbon-adjust", type=float, default=0.2,
                      help="Adjustment factor for ntSynt-viz ribbons. Increase if ribbon plot labels are cut off.")
     # ------------------------------------------------------------------
@@ -126,17 +133,20 @@ def parse_args() -> argparse.Namespace:
                          "(place after all other flags, e.g. -- --rerun-incomplete)."
                      ))
 
-    return p.parse_args()
+    return p.parse_args(), p
 
 
 def build_config(args: argparse.Namespace) -> dict:
     """Translate parsed CLI args into the config dict the Snakefile expects."""
     return {
-        "accessions_tsv":    str(Path(args.accessions).resolve()),
-        "taxonomic_group":   args.group,
-        "tax_level":         args.tax_level,
-        "tax_value":         args.tax_value if args.tax_value else args.group.capitalize(),
-        "date":              args.date,
+        "accessions":    str(Path(args.accessions).resolve()) if args.accessions else "",
+        "genomes": str(Path(args.accessions).resolve()) if args.genomes else "",
+        "prefix":  args.prefix,
+        "name_conversions": args.name_conversions,
+        "make_tree": args.make_tree,
+        "mt_genomes": args.mt_genomes,
+        "mt_name_conversions": args.mt_name_conversions,
+        "date":              f"{args.prefix}_assemblies",
         "fpr":               args.fpr,
         "ntsynt_k":          args.ntsynt_k,
         "ntsynt_w":          args.ntsynt_w,
@@ -149,13 +159,21 @@ def build_config(args: argparse.Namespace) -> dict:
 def validate_paths(args: argparse.Namespace) -> None:
     """Abort early if required input files are missing."""
     errors = []
-    for label, path in [
-        ("--accessions",        args.accessions),
-    ]:
-        if not Path(path).exists():
-            errors.append(f"  {label}: file not found: {path}")
+    if args.genomes and not Path(args.genomes).exists():
+        errors.append(f" --genomes: file not found: {args.genomes}")
+    elif args.genomes:
+        with open(args.genomes, 'r', encoding="utf-8") as fin:
+            for genome in fin:
+                if not Path(genome).exists():
+                    errors.append(f"Genome file listed in --genome not found: {genome}")
+    if args.accessions and not Path(args.accessions).exists():
+        errors.append(f" --accessions: file not found: {args.accessions}")
     if args.tree and not Path(args.tree).exists():
         errors.append(f"  --tree: file not found: {args.tree}")
+    if args.make_tree and args.mt_genomes and not Path(args.mt_genomes).exists():
+        errors.append(f"  --mt-genomes: file not found: {args.mt_genomes}")
+    if args.make_tree and args.mt_genomes and not Path(args.mt_name_conversions).exists():
+        errors.append(f"  --mt-name-conversions: file not found: {args.mt_name_conversions}")
     if errors:
         print("ERROR: the following required files were not found:", file=sys.stderr)
         print("\n".join(errors), file=sys.stderr)
@@ -200,9 +218,26 @@ def build_snakemake_cmd(args: argparse.Namespace, config: dict) -> list[str]:
 
     return cmd
 
+def validate_options(args, parser):
+    """Validate that input arguments are compatible"""
+    if not args.accessions and not args.genomes:
+        raise parser.error("Please specify either --accessions or --genomes")
+    if args.accessions and args.genomes:
+        raise parser.error("Please specify one of --accessions or --genomes")
+    if args.mt_genomes and not args.mt_name_conversions:
+        raise parser.error("If --mt-genomes is supplied, please also supply --mt-name-conversions")
+    if not args.mt_genomes and args.mt_name_conversions:
+        print("WARNING: --mt-name-conversions only used when --mt-genomes specified")
+    if not args.make_tree and args.mt_genomes:
+        print("WARNING: --mt-genomes is only used when --make-tree is specified.")
+    if args.tree and args.make_tree:
+        print("WARNING: --tree specified, so will override --make-tree.")
+        args.make_tree = False
+
 def main() -> None:
     """Main entry point: parse args, validate, build config, and launch Snakemake."""
-    args = parse_args()
+    args, parser = parse_args()
+    validate_options(args, parser)
     validate_paths(args)
     config = build_config(args)
 

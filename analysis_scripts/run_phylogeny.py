@@ -67,6 +67,8 @@ def parse_args() -> argparse.Namespace:
     )
     mt.add_argument("--mt-fasta", default="", metavar="PATH",
                     help="User-supplied MT FASTA (required when --mt-source user-fasta).")
+    mt.add_argument("--name-conversion", required=True,
+                    help="Name conversion file for nuclear genomes")
 
     # ------------------------------------------------------------------
     # Optional overrides
@@ -96,7 +98,7 @@ def build_config(args: argparse.Namespace) -> dict:
 
     # Paths produced by the master pipeline
     seq_report   = f"{assembly_dir}/{fam_low}_sequence-reports.tsv"
-    name_conv    = f"{assembly_dir}/{fam_low}_name_conversion.tsv"
+    name_conv    = args.name_conversion
     fasta_list   = f"{assembly_dir}/{fam_low}_fasta_list.txt"
 
     return {

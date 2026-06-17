@@ -38,28 +38,26 @@ import os, glob, sys, shutil
 # ---------------------------------------------------------------------------
 # Convenience aliases
 # ---------------------------------------------------------------------------
-GROUP     = config["taxonomic_group"]
-GROUP_LOWERCASE   = GROUP.lower()
-GROUP_CAP   = GROUP.capitalize()
+PREFIX   = config.get("prefix")
 DATE      = config["date"]
 
-# Taxonomic filter applied to the input TSV before downloading.
-# tax_level is the TSV column name (e.g. "family", "order", "class").
-# tax_value is the value to match; defaults to GROUP_CAP if not supplied,
-# which is the right default when --group already names the taxon being filtered.
-TAX_LEVEL = config.get("tax_level", "family")
-TAX_VALUE = config.get("tax_value", GROUP_CAP)
+ACCESSIONS = config.get("accessions", "")
+GENOMES = config.get("genomes", "")
+NAME_CONVERSIONS = config.get("name_conversions", "")
 FPR       = config["fpr"]
 K         = config["ntsynt_k"]
 W         = config["ntsynt_w"]
 SCRIPTS   = config["scripts_dir"]           
 TREEFILE  = config.get("treefile", "")
-MAKE_TREE = True
+MAKE_TREE = config.get("make_tree", False)
+MT_GENOMES = config.get("mt_genomes", "")
+MT_NAME_CONVERSIONS = config.get("mt_name_conversions", "")
+
 NTSYNT_VIZ_RIBBON_ADJUST = config.get("ntsynt_viz_ribbon_adjust", 0.2)
-NTSYNT_VIZ_RIBBON_PLOT = f"{GROUP_LOWERCASE}_ribbon-plot_tree.png" if MAKE_TREE or TREEFILE else f"{GROUP_LOWERCASE}_ribbon-plot.png"
+NTSYNT_VIZ_RIBBON_PLOT = f"{PREFIX}_ribbon-plot_tree.png" if MAKE_TREE or TREEFILE else f"{PREFIX}_ribbon-plot.png"
 
 ASSEMBLY_DIR  = f"{DATE}_assemblies"
-NCBI_DATA_DIR = f"{ASSEMBLY_DIR}/{GROUP_LOWERCASE}_assemblies/ncbi_dataset/data"
+NCBI_DATA_DIR = f"{ASSEMBLY_DIR}/{PREFIX}_assemblies/ncbi_dataset/data"
 MASH_DIR      = f"mash"
 VIZ_DIR       = f"ntsynt-viz"
 
@@ -87,8 +85,8 @@ def get_fai_list(_=None):
 rule all:
     input:
         # Chromosome stats
-        f"{ASSEMBLY_DIR}/{GROUP_LOWERCASE}_abyss_fac.tsv",
-        f"{ASSEMBLY_DIR}/{GROUP_LOWERCASE}_abyss_fac-summary.tsv",
+        f"{ASSEMBLY_DIR}/{PREFIX}_abyss_fac.tsv",
+        f"{ASSEMBLY_DIR}/{PREFIX}_abyss_fac-summary.tsv",
         # Mash
         f"{MASH_DIR}/full_assemblies_dist.tsv",
         # ntSynt outputs
@@ -104,8 +102,8 @@ rule all:
         # Divergence plots
         f"{MASH_DIR}/mash_divergence_boxplot.pdf",
         # HTML and PDF report,
-        f"{GROUP_LOWERCASE}_ntsynt_report.html",
-        f"{GROUP_LOWERCASE}_ntsynt_report.pdf",
+        f"{PREFIX}_ntsynt_report.html",
+        f"{PREFIX}_ntsynt_report.pdf",
 
 
 
@@ -114,74 +112,11 @@ rule all:
 # 1. Download assemblies
 # ===========================================================================
 
-rule download_assemblies_filter:
-    """
-    Filter the input TSV to the desired taxonomic group, then download assemblies.
-
-    The filter uses mlr to match {params.tax_level} == {params.tax_value}
-    (case-insensitive), so the same TSV can span multiple groups and only the
-    relevant accessions are passed to `datasets`.
-    """
-    input:
-        tsv = config["accessions_tsv"],
-    output:
-        acc_tsv = f"{ASSEMBLY_DIR}/{GROUP_LOWERCASE}_biogenomes.tsv",
-    params:
-        family_low = GROUP_LOWERCASE,
-        outdir     = ASSEMBLY_DIR,
-        tax_level  = TAX_LEVEL,
-        tax_value  = TAX_VALUE,
-    shell:
-        r"""
-        set -euo pipefail
-        mkdir -p {params.outdir}
-
-        # ------------------------------------------------------------------
-        # 1. Filter to the target taxonomic group using mlr.
-        # ------------------------------------------------------------------
-        mlr --tsv filter '
-            ${params.tax_level} == "{params.tax_value}"
-        ' {input.tsv} > {output.acc_tsv}
-
-        n_rows=$(tail -n+2  {output.acc_tsv} |wc -l)
-        echo "  Found $n_rows assemblies for {params.tax_level}={params.tax_value}"
-        if [ "$n_rows" -eq 0 ]; then
-            echo "ERROR: No rows matched. Check --tax-level / --tax-value and your TSV headers." >&2
-            exit 1
-        fi
-        """
-
-
-rule download_assemblies_extract:
-    input:
-        tsv = config["accessions_tsv"],
-        acc_tsv = rules.download_assemblies_filter.output.acc_tsv
-    output:
-        accfile = f"{ASSEMBLY_DIR}/{GROUP_LOWERCASE}_accessions.txt",
-    params:
-        family_low = GROUP_LOWERCASE,
-        outdir     = ASSEMBLY_DIR,
-        tax_level  = TAX_LEVEL,
-        tax_value  = TAX_VALUE,
-    shell:
-        r"""
-        # ------------------------------------------------------------------
-        # 2. Extract accessions (dropping empty values).
-        # ------------------------------------------------------------------
-        mlr --tsv \
-            filter '$["Assembly Accession"] != ""' \
-            then filter '${{Assembly Level}} == "Complete Genome" || ${{Assembly Level}} == "Chromosome"' \
-            then cut -f "Assembly Accession" \
-            then label accession \
-            {input.acc_tsv} \
-            | tail -n +2 > {output.accfile}
-        """
-
 rule download_assemblies_sequence_reports:
     input: 
-        acc_tsv = rules.download_assemblies_extract.output.accfile
+        acc_tsv = ACCESSIONS
     output:
-        seq_report = f"{ASSEMBLY_DIR}/{GROUP_LOWERCASE}_sequence-reports.tsv"
+        seq_report = f"{ASSEMBLY_DIR}/{PREFIX}_sequence-reports.tsv"
     shell:
         r"""
         datasets summary genome accession --inputfile {input.acc_tsv} \
@@ -193,16 +128,12 @@ rule download_assemblies_sequence_reports:
 
 rule download_assemblies_ncbi:
     input:
-        tsv = config["accessions_tsv"],
-        acc_tsv = rules.download_assemblies_filter.output.acc_tsv,
-        accfile = rules.download_assemblies_extract.output.accfile
+        accfile = ACCESSIONS,
     output:
         done    = f"{ASSEMBLY_DIR}/download.done",
     params:
-        family_low = GROUP_LOWERCASE,
+        family_low = PREFIX,
         outdir     = ASSEMBLY_DIR,
-        tax_level  = TAX_LEVEL,
-        tax_value  = TAX_VALUE,
     shell:
         """
         # ------------------------------------------------------------------
@@ -235,13 +166,13 @@ rule filter_assemblies_to_chromosomes:
     Also writes a per-accession <accession>.chromosomes.tsv for reference.
     """
     input:
-        accfile    = rules.download_assemblies_extract.output.accfile,
+        accfile    = ACCESSIONS,
         seq_report = rules.download_assemblies_sequence_reports.output.seq_report,
         done       = f"{ASSEMBLY_DIR}/download.done",
     output:
         done = f"{ASSEMBLY_DIR}/filter_chromosomes.done",
     params:
-        fasta_root = f"{ASSEMBLY_DIR}/{GROUP_LOWERCASE}_assemblies/ncbi_dataset/data",
+        fasta_root = f"{ASSEMBLY_DIR}/{PREFIX}_assemblies/ncbi_dataset/data",
     log:
         f"{ASSEMBLY_DIR}/filter_chromosomes.log",
     shell:
@@ -325,7 +256,7 @@ rule list_fastas:
     input:
         f"{ASSEMBLY_DIR}/index_fastas.done",
     output:
-        fasta_list = f"{ASSEMBLY_DIR}/{GROUP_LOWERCASE}_fasta_list.txt",
+        fasta_list = f"{ASSEMBLY_DIR}/{PREFIX}_fasta_list.txt",
     run:
         fastas = get_fastas()
         if not fastas:
@@ -337,57 +268,6 @@ rule list_fastas:
             fh.write("\n".join(fastas) + "\n")
 
 
-# ===========================================================================
-# 4. Auto-generate name_conversion TSV for ntSynt-viz
-#    columns: filename  display_name
-# ===========================================================================
-
-rule make_name_conversion:
-    """
-    Map each *.fna basename to a display name derived from the accession TSV.
-    Column "Assembly Accession" is used as the display name if a
-    "Species Name" / "Organism Name" column is absent.
-    Falls back to the bare filename stem if no match is found.
-    """
-    input:
-        # Use the already-filtered TSV (only rows for this taxonomic group)
-        tsv        = f"{ASSEMBLY_DIR}/{GROUP_LOWERCASE}_biogenomes.tsv",
-        fasta_list = f"{ASSEMBLY_DIR}/{GROUP_LOWERCASE}_fasta_list.txt",
-    output:
-        name_conv = f"{ASSEMBLY_DIR}/{GROUP_LOWERCASE}_name_conversion.tsv",
-    shell:
-        r"""
-        set -euo pipefail
-
-        # ---------------------------------------------------------------
-        # 1. Use mlr to extract accession + best available display name.
-        #    We try "Species Name", "Organism Name", "species" in order,
-        #    falling back to the accession itself via a computed field.
-        #    Output: two-column TSV  accession<TAB>species_name
-        # ---------------------------------------------------------------
-        mlr --tsv cut -f "Assembly Accession",species \
-            {input.tsv} |tr " " "_" > {output.name_conv}.acc_map.tmp
-
-        # ---------------------------------------------------------------
-        # 2. For each discovered FASTA, look up the matching display name.
-        #    NCBI names files as <GCA_xxx.x>_<asm_name>_genomic.fna;
-        #    we extract the accession prefix with sed and join on it.
-        # ---------------------------------------------------------------
-        while IFS= read -r fa; do
-            base=$(basename "$fa")
-            # Extract GCA_/GCF_ accession prefix from filename
-            acc=$(echo "${{base}}" | sed -E 's/(GC[AF]_[0-9]+\.[0-9]+).*/\1/')
-            # Look up display name with mlr; fall back to accession if not found
-            species=$(mlr --tsv filter -s acc=${{acc}} '${{Assembly_Accession}} == @acc' \
-                          then cut -f "species" \
-                          {output.name_conv}.acc_map.tmp \
-                          | tail -n +2 | head -n 1)
-            echo -e "${{base}}\t${{species}}"
-        done < {input.fasta_list} > {output.name_conv}
-
-        rm -f {output.name_conv}.acc_map.tmp
-        """
-
 
 # ===========================================================================
 # 5. Chromosome / contig stats with abyss-fac
@@ -395,9 +275,9 @@ rule make_name_conversion:
 
 rule abyss_fac:
     input:
-        fasta_list = f"{ASSEMBLY_DIR}/{GROUP_LOWERCASE}_fasta_list.txt",
+        fasta_list = f"{ASSEMBLY_DIR}/{PREFIX}_fasta_list.txt",
     output:
-        stats = f"{ASSEMBLY_DIR}/{GROUP_LOWERCASE}_abyss_fac.tsv",
+        stats = f"{ASSEMBLY_DIR}/{PREFIX}_abyss_fac.tsv",
     shell:
         r"""
         set -euo pipefail
@@ -408,7 +288,7 @@ rule abyss_fac_stats:
     input:
         stats = rules.abyss_fac.output.stats,
     output:
-        summary = f"{ASSEMBLY_DIR}/{GROUP_LOWERCASE}_abyss_fac-summary.tsv",
+        summary = f"{ASSEMBLY_DIR}/{PREFIX}_abyss_fac-summary.tsv",
     shell:
         r"""
         mlr --tsv stats1 -a min,max,count -f n,sum \
@@ -423,7 +303,7 @@ rule abyss_fac_stats:
 
 rule mash_sketch_full:
     input:
-        fasta_list = f"{ASSEMBLY_DIR}/{GROUP_LOWERCASE}_fasta_list.txt",
+        fasta_list = f"{ASSEMBLY_DIR}/{PREFIX}_fasta_list.txt",
     output:
         dist = f"{MASH_DIR}/full_assemblies_dist.tsv",
     shell:
@@ -453,7 +333,7 @@ rule max_mash_dist:
 
 rule run_ntsynt:
     input:
-        fasta_list = f"{ASSEMBLY_DIR}/{GROUP_LOWERCASE}_fasta_list.txt",
+        fasta_list = f"{ASSEMBLY_DIR}/{PREFIX}_fasta_list.txt",
         max_dist   = f"{MASH_DIR}/max_mash_dist.txt",
     output:
         blocks = BLOCKS_TSV,
@@ -504,7 +384,7 @@ rule ntsynt_block_stats:
 rule ntsynt_mx_stats:
     input:
         blocks     = BLOCKS_TSV,
-        fasta_list = f"{ASSEMBLY_DIR}/{GROUP_LOWERCASE}_fasta_list.txt",
+        fasta_list = f"{ASSEMBLY_DIR}/{PREFIX}_fasta_list.txt",
     output:
         stats   = f"{NTSYNT_STEM}.mx.stats.tsv",
         mx_list = f"mx_files.txt",
@@ -525,6 +405,25 @@ rule ntsynt_mx_stats:
             1> {output.stats}
         """
 
+# ===========================================================================
+# Fix name conversion
+# ===========================================================================
+rule finalize_name_conversion:
+    input:
+        name_conv = NAME_CONVERSIONS
+    output:
+        format_name_conv = f"{PREFIX}_name_conversion.tsv"
+    run:
+        if ACCESSIONS:
+            with open(input.name_conv) as infile, open(output.format_name_conv, "w") as outfile:
+                for line in infile:
+                    line = line.rstrip("\n")
+                    if not line:
+                        continue
+                    accession, new_name = line.split("\t")
+                    outfile.write(f"{accession}.chr.fa\t{new_name}\n")
+        if GENOMES:
+            os.symlink(os.path.abspath(input.name_conv), output.format_name_conv)
 
 # ===========================================================================
 # 11. ntSynt-viz
@@ -534,38 +433,39 @@ def get_treefile(wildcards):
     if TREEFILE:
         return TREEFILE
     if MAKE_TREE:
-        return f"phylogeny/tree/{GROUP_LOWERCASE}.nwk"
+        return f"phylogeny/tree/{PREFIX}.nwk"
     return []
 
 def get_treefile_path(wildcards):
     if TREEFILE:
         return os.path.abspath(TREEFILE)
     if MAKE_TREE:
-        return os.path.abspath(f"phylogeny/tree/{GROUP_LOWERCASE}.nwk")
+        return os.path.abspath(f"phylogeny/tree/{PREFIX}.nwk")
     return []
 
 rule make_tree:
     input:
-        fastas = rules.list_fastas.output.fasta_list
+        fastas = rules.list_fastas.output.fasta_list,
+        name_conv = rules.finalize_name_conversion.output.format_name_conv
     output:
-        tree = f"phylogeny/tree/{GROUP_LOWERCASE}.nwk"
+        tree = f"phylogeny/tree/{PREFIX}.nwk"
     shell:
-        "run_phylogeny.py --group {GROUP_LOWERCASE} --date {DATE}"
+        "run_phylogeny.py --group {PREFIX} --date {DATE} --name-conversion {input.name_conv}"
 
 rule run_ntsynt_viz:
     input:
         blocks    = BLOCKS_TSV,
-        name_conv = f"{ASSEMBLY_DIR}/{GROUP_LOWERCASE}_name_conversion.tsv",
+        name_conv = rules.finalize_name_conversion.output.format_name_conv,
         done      = f"{ASSEMBLY_DIR}/index_fastas.done",
         treefile = get_treefile,
     output:
-        links = f"{VIZ_DIR}/{GROUP_LOWERCASE}.sequence_lengths.sorted.tsv",
+        links = f"{VIZ_DIR}/{PREFIX}.sequence_lengths.sorted.tsv",
         done = f"{VIZ_DIR}/ntsynt_viz.done",
         out_plot = f"{VIZ_DIR}/{NTSYNT_VIZ_RIBBON_PLOT}"
     log:
         f"ntsynt_viz.log",
     params:
-        prefix   = GROUP_LOWERCASE,
+        prefix   = PREFIX,
         treeflag = lambda wildcards, input: (f"--tree {p}" if (p := get_treefile_path(wildcards)) else ""),
         ribbon_adjust = NTSYNT_VIZ_RIBBON_ADJUST,
     run:
@@ -610,7 +510,7 @@ rule extract_synteny_regions:
     """
     input:
         blocks     = BLOCKS_TSV,
-        fasta_list = f"{ASSEMBLY_DIR}/{GROUP_LOWERCASE}_fasta_list.txt",
+        fasta_list = f"{ASSEMBLY_DIR}/{PREFIX}_fasta_list.txt",
     output:
         done = "regions_extracted.done",
     params:
@@ -710,18 +610,18 @@ rule generate_report:
     All tables and images are embedded as base64 — no external files needed.
     """
     input:
-        abyss_fac     = f"{ASSEMBLY_DIR}/{GROUP_LOWERCASE}_abyss_fac-summary.tsv",
+        abyss_fac     = f"{ASSEMBLY_DIR}/{PREFIX}_abyss_fac-summary.tsv",
         block_stats   = f"{NTSYNT_STEM}.synteny_blocks.stats.tsv",
         ribbon_plot   = rules.run_ntsynt_viz.output.out_plot,
         discontinuity = f"{NTSYNT_STEM}.discontinuity_reasons.tsv",
         mash_plot     = f"{MASH_DIR}/mash_divergence_boxplot.png",
     output:
-        html = f"{GROUP_LOWERCASE}_ntsynt_report.html",
-        pdf = f"{GROUP_LOWERCASE}_ntsynt_report.pdf",
+        html = f"{PREFIX}_ntsynt_report.html",
+        pdf = f"{PREFIX}_ntsynt_report.pdf",
     params:
         script = f"{SCRIPTS}/generate_report.py",
-        group  = GROUP_LOWERCASE,
-        prefix = f"{GROUP_LOWERCASE}_ntsynt_report"
+        group  = PREFIX,
+        prefix = f"{PREFIX}_ntsynt_report"
     shell:
         r"""
         python3 {params.script} \
