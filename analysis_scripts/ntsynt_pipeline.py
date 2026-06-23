@@ -114,6 +114,13 @@ def parse_args() -> argparse.Namespace:
                      help="Optional Newick tree file for ntSynt-viz. Omit to skip.")
     opt.add_argument("--ntsynt-viz_ribbon-adjust", type=float, default=0.2,
                      help="Adjustment factor for ntSynt-viz ribbons. Increase if ribbon plot labels are cut off.")
+    opt.add_argument("-b", "--block_size", help=argparse.SUPPRESS)
+    opt.add_argument("--indel", help=argparse.SUPPRESS)
+    opt.add_argument("--merge", help=argparse.SUPPRESS)
+    opt.add_argument("--scale", help=argparse.SUPPRESS)
+    opt.add_argument("--seq_length", help=argparse.SUPPRESS, type=int)
+    opt.add_argument("--w_rounds", nargs="+", help=argparse.SUPPRESS, type=int)
+    
     # ------------------------------------------------------------------
     # Snakemake execution options
     # ------------------------------------------------------------------
@@ -140,7 +147,7 @@ def build_config(args: argparse.Namespace) -> dict:
     """Translate parsed CLI args into the config dict the Snakefile expects."""
     return {
         "accessions":    str(Path(args.accessions).resolve()) if args.accessions else "",
-        "genomes": str(Path(args.accessions).resolve()) if args.genomes else "",
+        "genomes": str(Path(args.genomes).resolve()) if args.genomes else "",
         "prefix":  args.prefix,
         "name_conversions": args.name_conversions,
         "make_tree": args.make_tree,
@@ -153,6 +160,12 @@ def build_config(args: argparse.Namespace) -> dict:
         "treefile":          args.tree,
         "ntsynt_viz_ribbon_adjust": args.ntsynt_viz_ribbon_adjust,
         "scripts_dir":     str(SCRIPTS_DIR.resolve()),
+        "block_size": args.block_size if args.block_size else "",
+        "indel":      args.indel if args.indel else "",
+        "merge":      args.merge if args.merge else "",
+        "scale": args.scale if args.scale else 100e6,
+        "seq_length": args.seq_length if args.seq_length else "",
+        "w_rounds": args.w_rounds if args.w_rounds else "",
     }
 
 
@@ -164,7 +177,7 @@ def validate_paths(args: argparse.Namespace) -> None:
     elif args.genomes:
         with open(args.genomes, 'r', encoding="utf-8") as fin:
             for genome in fin:
-                if not Path(genome).exists():
+                if not Path(genome.strip()).exists():
                     errors.append(f"Genome file listed in --genome not found: {genome}")
     if args.accessions and not Path(args.accessions).exists():
         errors.append(f" --accessions: file not found: {args.accessions}")

@@ -25,9 +25,6 @@ python run_phylogeny.py \
 """
 
 import argparse
-from email import errors
-import json
-import os
 import subprocess
 import sys
 from pathlib import Path
@@ -46,10 +43,8 @@ def parse_args() -> argparse.Namespace:
     # Shared with master pipeline
     # ------------------------------------------------------------------
     req = p.add_argument_group("required inputs")
-    req.add_argument("--group", required=True, metavar="NAME",
-                     help="Taxonomic group name (must match master pipeline run).")
-    req.add_argument("--date", required=True, metavar="YY-MM-DD",
-                     help="Date string used in the master pipeline download directory.")
+    req.add_argument("--prefix", required=True, metavar="PREFIX",
+                     help="Prefix string used in the master pipeline download directory.")
 
     # ------------------------------------------------------------------
     # MT source control
@@ -68,16 +63,16 @@ def parse_args() -> argparse.Namespace:
     mt.add_argument("--mt-fasta", default="", metavar="PATH",
                     help="User-supplied MT FASTA (required when --mt-source user-fasta).")
     mt.add_argument("--name-conversion", required=True,
-                    help="Name conversion file for nuclear genomes")
+                    help="Name conversion file for nuclear/mt genomes")
 
     # ------------------------------------------------------------------
     # Optional overrides
     # ------------------------------------------------------------------
     opt = p.add_argument_group("optional parameters")
-    opt.add_argument("--prefix", default=None,
-                     help="Output file prefix. Defaults to --group.")
     opt.add_argument("--threads", type=int, default=12,
                      help="Number of threads for mafft, iqtree, mashtree.")
+    opt.add_argument("--greedy-download", help="Download all possible genomes, even if falling back to nuclear genomes",
+                     action="store_true")
 
     # ------------------------------------------------------------------
     # Snakemake options
@@ -93,25 +88,24 @@ def parse_args() -> argparse.Namespace:
 
 
 def build_config(args: argparse.Namespace) -> dict:
-    fam_low      = args.group.lower()
-    assembly_dir = f"{args.date}_assemblies"
+    assembly_dir = f"{args.prefix}_assemblies"
 
     # Paths produced by the master pipeline
-    seq_report   = f"{assembly_dir}/{fam_low}_sequence-reports.tsv"
+    seq_report   = f"{assembly_dir}/{args.prefix}_sequence-reports.tsv"
     name_conv    = args.name_conversion
-    fasta_list   = f"{assembly_dir}/{fam_low}_fasta_list.txt"
+    fasta_list   = f"{assembly_dir}/{args.prefix}_fasta_list.txt"
 
     return {
-        "taxonomic_group":      fam_low,
-        "date":                 args.date,
+        "date":                 args.prefix,
         "seq_report":           str(Path(seq_report).resolve()),
         "name_conversion":      str(Path(name_conv).resolve()),
         "fasta_list":           str(Path(fasta_list).resolve()),
         "mt_source":            args.mt_source,
         "mt_fasta":             args.mt_fasta,
-        "prefix":               args.prefix or fam_low,
+        "prefix":               args.prefix,
         "threads":              args.threads,
         "scripts_dir":     str(SCRIPTS_DIR.resolve()),
+        "greedy_download": True if args.greedy_download else False
     }
 
 

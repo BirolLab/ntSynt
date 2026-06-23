@@ -67,25 +67,43 @@ paired <- bind_rows(syntenic, non_syntenic) %>%
   select(pair_id, region, mash_dist) %>%
   pivot_wider(names_from = region, values_from = mash_dist)
 
-if (nrow(paired) >= 3) {
-  test_result <- wilcox.test(
-    paired$Syntenic,
-    paired$`Non-syntenic`,
-    paired      = TRUE,
-    exact       = FALSE,
-    alternative = "two.sided"
-  )
-  cat("Paired Wilcoxon signed-rank test (Syntenic vs Non-syntenic)\n")
-  cat(sprintf("  V = %.4g,  p-value = %.4g\n\n",
-              test_result$statistic, test_result$p.value))
+# Only pairs with both measurements present can be used
+complete_pairs <- paired %>%
+  filter(!is.na(Syntenic), !is.na(`Non-syntenic`))
 
-  p_label <- ifelse(
-    test_result$p.value < 0.001,
-    sprintf("p = %.2e", test_result$p.value),
-    sprintf("p = %.4f", test_result$p.value)
+if (nrow(complete_pairs) >= 3) {
+  test_result <- tryCatch(
+    wilcox.test(
+      complete_pairs$Syntenic,
+      complete_pairs$`Non-syntenic`,
+      paired      = TRUE,
+      exact       = FALSE,
+      alternative = "two.sided"
+    ),
+    error = function(e) {
+      warning(sprintf("Wilcoxon test failed (%s); skipping.", conditionMessage(e)))
+      NULL
+    }
   )
+
+  if (!is.null(test_result)) {
+    cat("Paired Wilcoxon signed-rank test (Syntenic vs Non-syntenic)\n")
+    cat(sprintf("  V = %.4g,  p-value = %.4g\n\n",
+                test_result$statistic, test_result$p.value))
+
+    p_label <- ifelse(
+      test_result$p.value < 0.001,
+      sprintf("p = %.2e", test_result$p.value),
+      sprintf("p = %.4f", test_result$p.value)
+    )
+  } else {
+    p_label <- NULL
+  }
 } else {
-  warning("Too few pairs for Wilcoxon test; skipping.")
+  warning(sprintf(
+    "Only %d complete pairs available (need >= 3); skipping Wilcoxon test.",
+    nrow(complete_pairs)
+  ))
   p_label <- NULL
 }
 

@@ -5,13 +5,13 @@ phylogeny.smk  —  phylogenetic tree construction for ntSynt pipeline
 Constructs a phylogenetic tree from mitochondrial or nuclear sequences,
 for use alongside the ntSynt-viz ribbon plot.
 
- 1. If user supplies mitochondrial sequences (--mt-source user-fasta  +  --mt-fasta <path>),
-    these sequences are used to construct a ML tree with mafft and iqtree
- 2. If --mt-source auto is specified, the sequence reports for the downloaded accessions are 
+ 1. If user supplies mitochondrial sequences (--mt-source user-fasta + --mt-fasta <path>),
+    these sequences are used to construct a ML tree with mafft and iqtree. No downloads are required.
+ 2. If --mt-source auto is specified, the sequence reports for the downloaded accessions are
     queried for embedded mitochondrial sequences. If found, continue with ML tree as with (1).
-    Otherwise, construct tree using nuclear genomes
- 3. If --mt-source nuclear or mt genomes cannot be found with --mt-source auto, use mashtree
-    to construct a neighbour-joining tree directly from mash skecthes of the genomes.
+    Otherwise, attempt to find MT from alternate assembly versions and fall back to nuclear if needed.
+ 3. If --mt-source nuclear is specified, the pipeline skips MT download/extraction entirely
+    and constructs a tree directly from the nuclear genomes with mashtree.
 
 Override flags (set in run_phylogeny.py driver):
   mt_source : "auto" | "user-fasta" | "nuclear"
@@ -28,11 +28,10 @@ import shutil
 # ---------------------------------------------------------------------------
 # Config aliases
 # ---------------------------------------------------------------------------
-GROUP       = config["taxonomic_group"]
-FAM_LOW     = GROUP.lower()
-DATE        = config["date"]
-ASSEMBLY_DIR = f"{DATE}_assemblies"
-NCBI_DATA_DIR = f"{ASSEMBLY_DIR}/{FAM_LOW}_assemblies/ncbi_dataset/data"
+PREFIX        = config["prefix"]
+PREFIX_LOW     = PREFIX.lower()
+ASSEMBLY_DIR = f"{PREFIX}_assemblies"
+NCBI_DATA_DIR = f"{ASSEMBLY_DIR}/{PREFIX_LOW}_assemblies/ncbi_dataset/data"
 
 SEQ_REPORT    = config["seq_report"]        # from master pipeline
 NAME_CONV     = config["name_conversion"]   # from master pipeline
@@ -46,7 +45,8 @@ MT_FASTA_USER = config.get("mt_fasta", "")        # only used when mt_source=use
 
 SCRIPTS       = config.get("scripts_dir", {})
 THREADS       = config.get("threads", 12)
-PREFIX        = config.get("prefix", FAM_LOW)
+
+GREEDY_DOWNLOAD = config.get("greedy_download", False)
 
 # ---------------------------------------------------------------------------
 # Determine mt_source at parse time when set to "auto":
@@ -71,7 +71,8 @@ def resolve_mt_source() -> str:
     # MT_SOURCE == "auto": check the sequence report
     if not os.path.exists(SEQ_REPORT):
         # Report not yet generated — can't determine; default to nuclear
-        raise ValueError(f"{SEQ_REPORT} does not exist - exiting.")
+        print(f"{SEQ_REPORT} does not exist - revert to nuclear analysis.")
+        return "nuclear"
 
     # Load name conversion: fasta filename -> species name
     species_set = set()
@@ -203,11 +204,6 @@ rule find_missing_mt_species:
 
 
 rule download_missing_mt:
-    """
-    For each species missing an MT sequence, check all assembly versions for
-    MT sequences via the sequence report. If found, download those assemblies
-    and extract the MT sequence. If still not found, set the nuclear fallback flag.
-    """
     input:
         missing_tsv = f"{MT_DIR}/download/missing_mt_species.txt",
     output:
@@ -215,9 +211,10 @@ rule download_missing_mt:
         fallback_flag = f"{MT_DIR}/download/use_nuclear.flag",
         missing_accs  = f"{MT_DIR}/download/missing_mt_accessions.txt",
     params:
-        outdir    = f"{MT_DIR}/download",
-        seq_report = f"{MT_DIR}/download/missing_seq-reports.tsv",
-        mt_accs   = f"{MT_DIR}/download/missing_mt_found_accessions.txt",
+        outdir      = f"{MT_DIR}/download",
+        seq_report  = f"{MT_DIR}/download/missing_seq-reports.tsv",
+        mt_accs     = f"{MT_DIR}/download/missing_mt_found_accessions.txt",
+        greedy      = GREEDY_DOWNLOAD,   # CHANGED: passed through as param
     log:
         f"{MT_DIR}/download/download_mt.log",
     shell:
@@ -226,7 +223,6 @@ rule download_missing_mt:
         mkdir -p {params.outdir}
         use_nuclear=0
 
-        # If no species are missing MT, exit cleanly
         if [ ! -s {input.missing_tsv} ]; then
             echo "  No missing MT species — moving to next step." | tee -a {log}
             touch {output.missing_accs}
@@ -235,15 +231,9 @@ rule download_missing_mt:
             exit 0
         fi
 
-        # ------------------------------------------------------------------
-        # 1. Get the original accessions for missing species
-        # ------------------------------------------------------------------
         cut -f1 {input.missing_tsv} > {output.missing_accs}
 
-        # ------------------------------------------------------------------
-        # 2. Query sequence reports across ALL assembly versions
-        # ------------------------------------------------------------------
-        echo "  Querying sequence reports for all assembly versions to attempt MT sequence retrieval..." | tee -a {log}
+        echo "  Querying sequence reports for all assembly versions..." | tee -a {log}
         datasets summary genome accession \
             --inputfile {output.missing_accs} \
             --report sequence \
@@ -254,9 +244,6 @@ rule download_missing_mt:
             --fields accession,chr-name,genbank-seq-acc,mol-type,role \
         > {params.seq_report}
 
-        # ------------------------------------------------------------------
-        # 3. Check which original accessions have MT in any version
-        # ------------------------------------------------------------------
         mlr --tsv \
             filter '${{Molecule type}} == "Mitochondrion" || ${{Molecule type}} == "Mitochondrial" || ${{Chromosome name}} == "MT" || ${{Chromosome name}} == "MIT";' \
             then cut -f "Assembly Accession" \
@@ -269,23 +256,37 @@ rule download_missing_mt:
         echo "  Found MT in ${{n_found}}/${{n_missing}} missing assemblies (across all versions)." \
             | tee -a {log}
 
-        # ------------------------------------------------------------------
-        # 4. If not all species have MT, fall back to nuclear
-        #    Otherwise, batch download + extract all at once
-        # ------------------------------------------------------------------
         if [ "${{n_found}}" -ne "${{n_missing}}" ]; then
-            echo "  WARNING: MT not found for all missing species — falling back to nuclear." \
-                | tee -a {log}
-            # Log which accessions are missing
+            # Log which accessions are unresolvable
             comm -23 \
                 <(sort {output.missing_accs}) \
                 <(sort {params.mt_accs}) \
             | while read -r acc; do
                 echo "    No MT found for: $acc" | tee -a {log}
             done
+
+            # CHANGED: always set nuclear flag when coverage is incomplete
             use_nuclear=1
-        else
-            echo "  MT found for all missing species — downloading in batch..." | tee -a {log}
+
+            # CHANGED: if not greedy, skip downloading entirely (original behaviour)
+            if [ "{params.greedy}" != "True" ]; then
+                echo "  WARNING: MT not found for all missing species — falling back to nuclear." \
+                    | tee -a {log}
+                echo "$use_nuclear" > {output.fallback_flag}
+                touch {output.done}
+                exit 0
+            else
+                echo "  WARNING: MT not found for all missing species — falling back to nuclear," \
+                     " but downloading available MT sequences (greedy mode)." \
+                    | tee -a {log}
+            fi
+        fi
+
+        # CHANGED: this download+extract block now runs for both the "all found"
+        # case and the "partial found, greedy=True" case.
+        # When n_found == 0 and greedy=True, mt_accs is empty so the loop is a no-op.
+        if [ "${{n_found}}" -gt 0 ]; then
+            echo "  Downloading ${{n_found}} MT assemblies..." | tee -a {log}
 
             datasets download genome accession \
                 --inputfile {params.mt_accs} \
@@ -298,7 +299,6 @@ rule download_missing_mt:
                   -d {params.outdir}/missing_mt_assemblies 2>> {log}
             rm -f {params.outdir}/missing_mt_assemblies.zip
 
-            # Extract MT sequence for each accession into <acc>.mt.fa
             while IFS=$'\t' read -r acc; do
                 mt_gbk=$(mlr --tsv \
                              filter -s my_acc="$acc" \
@@ -326,6 +326,7 @@ rule download_missing_mt:
         echo "$use_nuclear" > {output.fallback_flag}
         touch {output.done}
         """
+
 # ===========================================================================
 # Extract MT sequences from chromosome assemblies
 # ===========================================================================
@@ -337,15 +338,16 @@ rule extract_mt_from_assemblies:
     Writes one <accession>.mt.fa per assembly into MT_DIR/embedded/.
     """
     input:
-        seq_report = SEQ_REPORT,
-        fasta_list = FASTA_LIST,
-        missing_done = rules.download_missing_mt.output.missing_accs,
+        seq_report       = SEQ_REPORT,
+        fasta_list       = FASTA_LIST,
+        missing_done     = rules.download_missing_mt.output.missing_accs,
         nuclear_fallback = rules.download_missing_mt.output.fallback_flag,
     output:
         done = f"{MT_DIR}/embedded/extract_mt.done",
     params:
         outdir     = f"{MT_DIR}/embedded",
         fasta_root = NCBI_DATA_DIR,
+        greedy     = GREEDY_DOWNLOAD,    # CHANGED: added
     log:
         f"{MT_DIR}/embedded/extract_mt.log",
     shell:
@@ -353,11 +355,13 @@ rule extract_mt_from_assemblies:
         set -euxo pipefail
         mkdir -p {params.outdir}
 
-        # Check nuclear fallback flag
         nuclear_flag=$(cat {input.nuclear_fallback})
-        if [ "$nuclear_flag" == "1" ]; then
-            # Don't extract mt assemblies if going to do nuclear mashtree anyway
-            echo "Skipping extracting mt from assemblies, as nuclear flag set."
+
+        # CHANGED: in greedy mode, proceed with extraction even if nuclear
+        # fallback is set — there may still be embedded MT sequences to harvest.
+        # Only skip when non-greedy AND nuclear flag is set.
+        if [ "$nuclear_flag" == "1" ] && [ "{params.greedy}" != "True" ]; then
+            echo "Skipping extracting mt from assemblies, as nuclear flag set." | tee -a {log}
             touch {output.done}
             exit 0
         fi
@@ -401,6 +405,7 @@ checkpoint collect_mt_fastas:
                          if MT_SOURCE_RESOLVED == "download" else [],
         fallback_flag  = f"{MT_DIR}/download/use_nuclear.flag"
                          if MT_SOURCE_RESOLVED == "download" else [],
+        mt_fasta = f"{MT_FASTA_USER}" if MT_SOURCE_RESOLVED == "user-fasta" else [],
     output:
         fof          = f"{MT_DIR}/mt_assemblies.fof",
         nuclear_flag = f"{MT_DIR}/use_nuclear.flag",
@@ -537,50 +542,60 @@ rule make_mt_name_conversion:
 
     If the nuclear flag is set, leaf labels are assembly accessions (filename
     stems), so the output maps those directly to species names instead.
+
+    If mt_source is 'user-fasta', the supplied name conversion file is used
+    directly (symlinked) as the output.
     """
     input:
-        seq_report   = SEQ_REPORT,
         name_conv    = NAME_CONV,
         nuclear_flag = f"{MT_DIR}/use_nuclear.flag",
+        seq_report   = SEQ_REPORT if MT_SOURCE_RESOLVED not in ("user-fasta", "nuclear") else [],
     output:
         mt_name_conv = f"{TREE_DIR}/mt_name_conversion.tsv",
+    params:
+        mt_source    = MT_SOURCE_RESOLVED,
     run:
-        nuclear = open(input.nuclear_flag).read().strip() == "1"
-
-        # Build accession -> species name from name conversion file
-        # Filenames like GCA_965165685.3.chr.fa -> extract accession prefix
-        acc_to_species = {}
-        with open(input.name_conv) as fh:
-            for line in fh:
-                parts = line.strip().split("\t")
-                if len(parts) < 2:
-                    continue
-                fasta_base, species = parts[0], parts[1]
-                m = re.match(r"(GC[AF]_\d+\.\d+)", fasta_base)
-                acc = m.group(1) if m else fasta_base
-                acc_to_species[acc] = species
-
         os.makedirs(TREE_DIR, exist_ok=True)
 
-        if nuclear:
-            # Leaf labels are filename stems (assembly accessions) — map directly
-            with open(output.mt_name_conv, "w") as out:
-                for acc, species in acc_to_species.items():
-                    out.write(f"{acc}.chr\t{species}\n")
+        if params.mt_source == "user-fasta":
+            src = os.path.abspath(input.name_conv)
+            dst = output.mt_name_conv
+            os.symlink(src, dst)
         else:
-            # Join via sequence report: GenBank seq accession -> assembly accession
-            with open(input.seq_report, newline="") as fh, \
-                 open(output.mt_name_conv, "w") as out:
-                reader = csv.DictReader(fh, delimiter="\t")
-                for row in reader:
-                    mol = row.get("Molecule type", row.get("mol-type", "")).strip().lower()
-                    if mol not in ("mitochondrion", "mitochondrial"):
+            nuclear = open(input.nuclear_flag).read().strip() == "1"
+
+            # Build accession -> species name from name conversion file
+            # Filenames like GCA_965165685.3.chr.fa -> extract accession prefix
+            acc_to_species = {}
+            with open(input.name_conv) as fh:
+                for line in fh:
+                    parts = line.strip().split("\t")
+                    if len(parts) < 2:
                         continue
-                    gbk_acc = row.get("GenBank seq accession", "").strip()
-                    asm_acc = row.get("Assembly Accession", "").strip()
-                    species = acc_to_species.get(asm_acc, asm_acc)
-                    if gbk_acc:
-                        out.write(f"{gbk_acc}\t{species}\n")
+                    fasta_base, species = parts[0], parts[1]
+                    m = re.match(r"(GC[AF]_\d+\.\d+)", fasta_base)
+                    acc = m.group(1) if m else fasta_base
+                    acc_to_species[acc] = species
+
+            if nuclear:
+                # Leaf labels are filename stems (assembly accessions) — map directly
+                with open(output.mt_name_conv, "w") as out:
+                    for acc, species in acc_to_species.items():
+                        out.write(f"{acc}.chr\t{species}\n")
+            else:
+                # Join via sequence report: GenBank seq accession -> assembly accession
+                with open(input.seq_report, newline="") as fh, \
+                     open(output.mt_name_conv, "w") as out:
+                    reader = csv.DictReader(fh, delimiter="\t")
+                    for row in reader:
+                        mol = row.get("Molecule type", row.get("mol-type", "")).strip().lower()
+                        if mol not in ("mitochondrion", "mitochondrial"):
+                            continue
+                        gbk_acc = row.get("GenBank seq accession", "").strip()
+                        asm_acc = row.get("Assembly Accession", "").strip()
+                        species = acc_to_species.get(asm_acc, asm_acc)
+                        if gbk_acc:
+                            out.write(f"{gbk_acc}\t{species}\n")
 
 rule rename_newick:
     input:

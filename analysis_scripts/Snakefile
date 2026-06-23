@@ -39,10 +39,9 @@ import os, glob, sys, shutil
 # Convenience aliases
 # ---------------------------------------------------------------------------
 PREFIX   = config.get("prefix")
-DATE      = config["date"]
 
-ACCESSIONS = config.get("accessions", "")
-GENOMES = config.get("genomes", "")
+ACCESSIONS = config.get("accessions") or ""
+GENOMES = config.get("genomes") or ""
 NAME_CONVERSIONS = config.get("name_conversions", "")
 FPR       = config["fpr"]
 K         = config["ntsynt_k"]
@@ -56,14 +55,22 @@ MT_NAME_CONVERSIONS = config.get("mt_name_conversions", "")
 NTSYNT_VIZ_RIBBON_ADJUST = config.get("ntsynt_viz_ribbon_adjust", 0.2)
 NTSYNT_VIZ_RIBBON_PLOT = f"{PREFIX}_ribbon-plot_tree.png" if MAKE_TREE or TREEFILE else f"{PREFIX}_ribbon-plot.png"
 
-ASSEMBLY_DIR  = f"{DATE}_assemblies"
-NCBI_DATA_DIR = f"{ASSEMBLY_DIR}/{PREFIX}_assemblies/ncbi_dataset/data"
+ASSEMBLY_DIR  = f"{PREFIX}_assemblies"
+NCBI_DATA_DIR = f"{ASSEMBLY_DIR}/{PREFIX}_assemblies/ncbi_dataset/data" if ACCESSIONS else ASSEMBLY_DIR
 MASH_DIR      = f"mash"
 VIZ_DIR       = f"ntsynt-viz"
 
 # ntSynt output file stem (matches ntSynt naming convention)
 NTSYNT_STEM = f"ntSynt.k{K}.w{W}"
 BLOCKS_TSV  = f"{NTSYNT_STEM}.synteny_blocks.tsv"
+
+# Hidden arguments
+BLOCK_SIZE = config.get("block_size") or ""
+INDEL = config.get("indel") or ""
+MERGE = config.get("merge") or ""
+SCALE = config.get("scale") or ""
+SEQ_LENGTH = config.get("seq_length") or ""
+W_ROUNDS = config.get("w_rounds") or ""
 
 # ---------------------------------------------------------------------------
 # Helper: discover FASTAs after download (populated by checkpoint)
@@ -109,7 +116,7 @@ rule all:
 
 
 # ===========================================================================
-# 1. Download assemblies
+# Download assemblies - if accessions specified
 # ===========================================================================
 
 rule download_assemblies_sequence_reports:
@@ -154,8 +161,9 @@ rule download_assemblies_ncbi:
 
         touch {output.done}
         """
+
 # ===========================================================================
-# Filter assemblies to chromosome sequences only
+# Filter downloaded assemblies to retain chromosome sequences only
 # ===========================================================================
 
 rule filter_assemblies_to_chromosomes:
@@ -197,7 +205,7 @@ rule filter_assemblies_to_chromosomes:
             chr_tsv={params.fasta_root}/${{accession}}/${{accession}}.chromosomes.tsv
             mlr --tsv \
                 filter -s my_acc="$accession" '$["Assembly Accession"] == @my_acc' \
-                then filter '$Role == "assembled-molecule" && $["Molecule type"] == "Chromosome"' \
+                then filter '$Role == "assembled-molecule" && ($["Molecule type"] == "Chromosome" || $["Molecule type"] == "Linkage Group" )' \
                 {input.seq_report} > "$chr_tsv"
 
             n_chr=$(tail -n +2 "$chr_tsv" | wc -l)
@@ -224,37 +232,86 @@ rule filter_assemblies_to_chromosomes:
         """
 
 # ===========================================================================
-# 2. Index all FASTAs with samtools faidx
+# GENOMES mode: stage user-supplied genome FASTAs (bypasses NCBI download)
 # ===========================================================================
 
-checkpoint index_fastas:
+rule stage_genomes:
     """
-    Index every *.chr.fa under the NCBI data directory.
-    Using a checkpoint so downstream rules can glob the actual file list.
+    For GENOMES mode, symlink each user-supplied genome FASTA
     """
     input:
-        f"{ASSEMBLY_DIR}/filter_chromosomes.done",
+        genomes = GENOMES,
     output:
-        done = f"{ASSEMBLY_DIR}/index_fastas.done",
+        done = f"{ASSEMBLY_DIR}/genomes_staged.done",
+        fasta_list = f"{ASSEMBLY_DIR}/{PREFIX}_fasta_list.txt"
+    params:
+        fasta_root = ASSEMBLY_DIR,
+    log:
+        f"{ASSEMBLY_DIR}/stage_genomes.log",
     shell:
         r"""
         set -euo pipefail
-        find {NCBI_DATA_DIR} -name '*.chr.fa' | while read fa; do
-            if [ ! -f "$fa.fai" ]; then
-                samtools faidx "$fa"
-            fi
-        done
+        while read -r genome_path; do
+            base=$(basename ${{genome_path}})
+            full_path=$(realpath ${{genome_path}})
+            ln -sf "$full_path" {params.fasta_root}/${{base}}
+            echo $(pwd)/{params.fasta_root}/${{base}} >> {output.fasta_list}
+        done < {input.genomes}
+
         touch {output.done}
         """
 
 
 # ===========================================================================
-# 3. Write a plain-text list of all FASTA paths (used by ntSynt, mash, etc.)
+# Index all FASTAs with samtools faidx
+# ===========================================================================
+
+def get_index_fastas_input():
+    """Get the appropriate status file for the mode being run"""
+    if ACCESSIONS:
+        return f"{ASSEMBLY_DIR}/filter_chromosomes.done"
+    elif GENOMES:
+        return f"{ASSEMBLY_DIR}/genomes_staged.done"
+
+checkpoint index_fastas:
+    """
+    Index every assemble FASTA file under the assembly directory.
+    Using a checkpoint so downstream rules can glob the actual file list.
+    """
+    input:
+        index_fasta_flag = get_index_fastas_input(),
+    output:
+        done = f"{ASSEMBLY_DIR}/index_fastas.done",
+    run:
+        if f"{ASSEMBLY_DIR}/genomes_staged.done" in input.index_fasta_flag:
+            shell(r"""
+                set -eux -o pipefail
+                while read -r genome_file; do 
+                    base=$(basename ${{genome_file}})
+                    samtools faidx "{ASSEMBLY_DIR}/${{base}}"
+                done < {GENOMES}
+                touch {output.done}
+                """)
+        else:
+            shell(r"""
+                set -eux -o pipefail
+                find {NCBI_DATA_DIR} -name '*.chr.fa' | while read fa; do
+                    if [ ! -f "$fa.fai" ]; then
+                        samtools faidx "$fa"
+                    fi
+                done
+                touch {output.done}
+                """)
+
+
+# ===========================================================================
+# Write a plain-text list of all downloaded FASTA paths (used by downstream steps)
 # ===========================================================================
 
 rule list_fastas:
     input:
         f"{ASSEMBLY_DIR}/index_fastas.done",
+        f"{ASSEMBLY_DIR}/filter_chromosomes.done",
     output:
         fasta_list = f"{ASSEMBLY_DIR}/{PREFIX}_fasta_list.txt",
     run:
@@ -270,12 +327,18 @@ rule list_fastas:
 
 
 # ===========================================================================
-# 5. Chromosome / contig stats with abyss-fac
+# Chromosome / contig stats with abyss-fac
 # ===========================================================================
+
+# Ensure that we use the appropriate path to obtain fasta_list
+if ACCESSIONS:
+    FASTA_LIST = rules.list_fastas.output.fasta_list
+else:
+    FASTA_LIST = rules.stage_genomes.output.fasta_list
 
 rule abyss_fac:
     input:
-        fasta_list = f"{ASSEMBLY_DIR}/{PREFIX}_fasta_list.txt",
+        fasta_list = FASTA_LIST,
     output:
         stats = f"{ASSEMBLY_DIR}/{PREFIX}_abyss_fac.tsv",
     shell:
@@ -303,7 +366,7 @@ rule abyss_fac_stats:
 
 rule mash_sketch_full:
     input:
-        fasta_list = f"{ASSEMBLY_DIR}/{PREFIX}_fasta_list.txt",
+        fasta_list = FASTA_LIST,
     output:
         dist = f"{MASH_DIR}/full_assemblies_dist.tsv",
     shell:
@@ -333,7 +396,7 @@ rule max_mash_dist:
 
 rule run_ntsynt:
     input:
-        fasta_list = f"{ASSEMBLY_DIR}/{PREFIX}_fasta_list.txt",
+        fasta_list = FASTA_LIST,
         max_dist   = f"{MASH_DIR}/max_mash_dist.txt",
     output:
         blocks = BLOCKS_TSV,
@@ -341,6 +404,10 @@ rule run_ntsynt:
         f"ntsynt.log",
     params:
         fpr   = FPR,
+        block_size = f"-b {BLOCK_SIZE}" if BLOCK_SIZE else "",
+        indel = f"--indel {INDEL}" if INDEL else "",
+        merge = f"--merge {MERGE}" if MERGE else "",
+        w_rounds = f"--w_rounds {" ".join(W_ROUNDS)}" if W_ROUNDS else "",
     shell:
         r"""
         set -euo pipefail
@@ -351,6 +418,7 @@ rule run_ntsynt:
             --fpr {params.fpr} \
             -k {K} \
             -w {W} \
+            {params.block_size} {params.indel} {params.merge} {params.w_rounds} \
             --benchmark
             &> {log}
         """
@@ -370,7 +438,7 @@ rule ntsynt_block_stats:
         script = f"{SCRIPTS}/denovo_synteny_block_stats.py",
     shell:
         r"""
-        fais=$(find {NCBI_DATA_DIR} -name '*.chr.fa.fai' | tr "\n" " ")
+        fais=$(find {NCBI_DATA_DIR} -name '*.fai' | tr "\n" " ")
         python3 {params.script} \
             --tsv {input.blocks} \
             --fai $fais \
@@ -384,7 +452,7 @@ rule ntsynt_block_stats:
 rule ntsynt_mx_stats:
     input:
         blocks     = BLOCKS_TSV,
-        fasta_list = f"{ASSEMBLY_DIR}/{PREFIX}_fasta_list.txt",
+        fasta_list = FASTA_LIST,
     output:
         stats   = f"{NTSYNT_STEM}.mx.stats.tsv",
         mx_list = f"mx_files.txt",
@@ -445,12 +513,16 @@ def get_treefile_path(wildcards):
 
 rule make_tree:
     input:
-        fastas = rules.list_fastas.output.fasta_list,
+        fastas = FASTA_LIST,
         name_conv = rules.finalize_name_conversion.output.format_name_conv
     output:
         tree = f"phylogeny/tree/{PREFIX}.nwk"
+    params:
+        mt_source = "--mt-source user-fasta" if MT_GENOMES else "",
+        mt_assemblies = f"--mt-fasta {MT_GENOMES}" if MT_GENOMES else "",
+        name_conv = f"{MT_NAME_CONVERSIONS}" if MT_GENOMES else {input.name_conv},
     shell:
-        "run_phylogeny.py --group {PREFIX} --date {DATE} --name-conversion {input.name_conv}"
+        "run_phylogeny.py --prefix {PREFIX} --name-conversion {params.name_conv} {params.mt_source} {params.mt_assemblies}"
 
 rule run_ntsynt_viz:
     input:
@@ -468,12 +540,16 @@ rule run_ntsynt_viz:
         prefix   = PREFIX,
         treeflag = lambda wildcards, input: (f"--tree {p}" if (p := get_treefile_path(wildcards)) else ""),
         ribbon_adjust = NTSYNT_VIZ_RIBBON_ADJUST,
+        block_length = f"--length {int(BLOCK_SIZE)}" if BLOCK_SIZE else "",
+        indel = f"--indel {INDEL}" if INDEL else "",
+        scale = f"--scale {SCALE}",
+        seq_length = f"--seq_length {int(SEQ_LENGTH)}" if SEQ_LENGTH else "",
     run:
         shell(
         """
-        set -euo pipefail
+        set -eux -o pipefail
         mkdir -p {VIZ_DIR} && cd {VIZ_DIR}
-        find ../{NCBI_DATA_DIR} -name '*.chr.fa.fai' > fais.txt
+        find ../{NCBI_DATA_DIR} -name '*.fai' > fais.txt
         """
         )
         with open(f"{VIZ_DIR}/fais.txt", 'r') as f:
@@ -490,7 +566,8 @@ rule run_ntsynt_viz:
             --ribbon_adjust {params.ribbon_adjust} \
             --height {height} \
             --annotate-genome-info \
-            {params.treeflag} \
+            {params.treeflag} {params.scale} \
+            {params.block_length} {params.indel} {params.seq_length} \
             &> {log}
         cd ../
         touch {output.done}
@@ -510,7 +587,7 @@ rule extract_synteny_regions:
     """
     input:
         blocks     = BLOCKS_TSV,
-        fasta_list = f"{ASSEMBLY_DIR}/{PREFIX}_fasta_list.txt",
+        fasta_list = FASTA_LIST,
     output:
         done = "regions_extracted.done",
     params:
