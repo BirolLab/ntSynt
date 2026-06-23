@@ -53,6 +53,10 @@ def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(
         description="Run the multi-genome synteny analysis pipeline.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+        epilog=(
+            "NOTE: All parameters available in ntSynt (https://github.com/BirolLab/ntsynt) "
+            "and ntSynt-viz (https://github.com/BirolLab/ntSynt-viz) can also be supplied to this script"
+        )
     )
 
     # ------------------------------------------------------------------
@@ -112,14 +116,39 @@ def parse_args() -> argparse.Namespace:
                      ))
     opt.add_argument("--tree", default="", metavar="NEWICK",
                      help="Optional Newick tree file for ntSynt-viz. Omit to skip.")
-    opt.add_argument("--ntsynt-viz_ribbon-adjust", type=float, default=0.2,
-                     help="Adjustment factor for ntSynt-viz ribbons. Increase if ribbon plot labels are cut off.")
+
+    # ntSynt
+    opt.add_argument("--hashes", type=int, default=None,
+                    help="Number of hash functions for Bloom filter creation [ntSynt default: 3].")
     opt.add_argument("-b", "--block_size", help=argparse.SUPPRESS)
     opt.add_argument("--indel", help=argparse.SUPPRESS)
     opt.add_argument("--merge", help=argparse.SUPPRESS)
-    opt.add_argument("--scale", help=argparse.SUPPRESS)
-    opt.add_argument("--seq_length", help=argparse.SUPPRESS, type=int)
     opt.add_argument("--w_rounds", nargs="+", help=argparse.SUPPRESS, type=int)
+
+    # ntSynt-viz
+    opt.add_argument("--scale", help="Length of scale bar in bases for ntSynt-viz", type=float,
+                     default=100e6)
+    opt.add_argument("--seq_length", help="Minimum sequence length for ntSynt-viz", type=int)
+    opt.add_argument("--ntsynt-viz_ribbon-adjust", type=float, default=0.2,
+                     help="Adjustment factor for ntSynt-viz ribbons. Increase if ribbon plot labels are cut off.")
+    opt.add_argument("--target-genome", default="", metavar="NAME",
+                    help="Target genome for ntSynt-viz (placed at top, ribbons coloured by its chromosomes).")
+    opt.add_argument("--viz-length", type=int, default=None,
+                    help="Minimum synteny block length for ntSynt-viz display (bp). Defaults to --block_size if set.")
+    opt.add_argument("--format", choices=["png", "pdf", "svg"], default="png",
+                    help="Output format for ntSynt-viz ribbon plot [png].")
+    opt.add_argument("--width", type=float, default=None,
+                    help="Width of ntSynt-viz ribbon plot in cm.")
+    opt.add_argument("--dpi", type=int, default=None,
+                    help="Resolution of ntSynt-viz ribbon plot (png only) [ntSynt-viz default: 300].")
+    opt.add_argument("--centromeres", default="", metavar="TSV",
+                    help="TSV file with centromere positions for ntSynt-viz (columns: bin_id, seq_id, start, end).")
+    opt.add_argument("--order", default="", metavar="FILE",
+                    help="File specifying genome order in ntSynt-viz ribbon plot.")
+    opt.add_argument("--keep", nargs="+", default=None, metavar="GENOME:CHR",
+                    help="Genome:chromosome pairs to show in ntSynt-viz (e.g. --keep genome1:chr1 genome2:chr3).")
+    opt.add_argument("--no-arrow", action="store_true",
+                    help="Do not draw strand-flip arrows in ntSynt-viz for normalization.")
     
     # ------------------------------------------------------------------
     # Snakemake execution options
@@ -166,6 +195,16 @@ def build_config(args: argparse.Namespace) -> dict:
         "scale": args.scale if args.scale else 100e6,
         "seq_length": args.seq_length if args.seq_length else "",
         "w_rounds": args.w_rounds if args.w_rounds else "",
+        "hashes":        args.hashes if args.hashes is not None else "",
+        "target_genome": args.target_genome,
+        "viz_length":    args.viz_length if args.viz_length is not None else "",
+        "viz_format":    args.format,
+        "viz_width":     args.width if args.width is not None else "",
+        "viz_dpi":       args.dpi if args.dpi is not None else "",
+        "centromeres":   args.centromeres,
+        "viz_order":     args.order,
+        "viz_keep":      " ".join(args.keep) if args.keep else "",
+        "no_arrow":      args.no_arrow,
     }
 
 
@@ -187,6 +226,10 @@ def validate_paths(args: argparse.Namespace) -> None:
         errors.append(f"  --mt-genomes: file not found: {args.mt_genomes}")
     if args.make_tree and args.mt_genomes and not Path(args.mt_name_conversions).exists():
         errors.append(f"  --mt-name-conversions: file not found: {args.mt_name_conversions}")
+    if args.centromeres and not Path(args.centromeres).exists():
+        errors.append(f"  --centromeres: file not found: {args.centromeres}")
+    if args.order and not Path(args.order).exists():
+        errors.append(f"  --order: file not found: {args.order}")
     if errors:
         print("ERROR: the following required files were not found:", file=sys.stderr)
         print("\n".join(errors), file=sys.stderr)

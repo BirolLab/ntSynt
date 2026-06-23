@@ -52,8 +52,22 @@ MAKE_TREE = config.get("make_tree", False)
 MT_GENOMES = config.get("mt_genomes", "")
 MT_NAME_CONVERSIONS = config.get("mt_name_conversions", "")
 
+HASHES        = config.get("hashes") or ""
+TARGET_GENOME = config.get("target_genome") or ""
+VIZ_LENGTH    = config.get("viz_length") or ""
+VIZ_FORMAT    = config.get("viz_format") or "png"
+VIZ_WIDTH     = config.get("viz_width") or ""
+VIZ_DPI       = config.get("viz_dpi") or ""
+CENTROMERES   = config.get("centromeres") or ""
+VIZ_ORDER     = config.get("viz_order") or ""
+VIZ_KEEP      = config.get("viz_keep") or ""
+NO_ARROW      = config.get("no_arrow", False)
 NTSYNT_VIZ_RIBBON_ADJUST = config.get("ntsynt_viz_ribbon_adjust", 0.2)
-NTSYNT_VIZ_RIBBON_PLOT = f"{PREFIX}_ribbon-plot_tree.png" if MAKE_TREE or TREEFILE else f"{PREFIX}_ribbon-plot.png"
+
+NTSYNT_VIZ_RIBBON_PLOT = (
+    f"{PREFIX}_ribbon-plot_tree.{VIZ_FORMAT}" if MAKE_TREE or TREEFILE
+    else f"{PREFIX}_ribbon-plot.{VIZ_FORMAT}"
+)
 
 ASSEMBLY_DIR  = f"{PREFIX}_assemblies"
 NCBI_DATA_DIR = f"{ASSEMBLY_DIR}/{PREFIX}_assemblies/ncbi_dataset/data" if ACCESSIONS else ASSEMBLY_DIR
@@ -402,12 +416,14 @@ rule run_ntsynt:
         blocks = BLOCKS_TSV,
     log:
         f"ntsynt.log",
+    threads: workflow.cores
     params:
-        fpr   = FPR,
+        fpr      = FPR,
+        hashes   = f"--hashes {HASHES}" if HASHES else "",
         block_size = f"-b {BLOCK_SIZE}" if BLOCK_SIZE else "",
-        indel = f"--indel {INDEL}" if INDEL else "",
-        merge = f"--merge {MERGE}" if MERGE else "",
-        w_rounds = f"--w_rounds {" ".join(W_ROUNDS)}" if W_ROUNDS else "",
+        indel    = f"--indel {INDEL}" if INDEL else "",
+        merge    = f"--merge {MERGE}" if MERGE else "",
+        w_rounds = f"--w_rounds {' '.join(str(x) for x in W_ROUNDS)}" if W_ROUNDS else "",
     shell:
         r"""
         set -euo pipefail
@@ -418,8 +434,10 @@ rule run_ntsynt:
             --fpr {params.fpr} \
             -k {K} \
             -w {W} \
+            -t {threads} \
+            {params.hashes} \
             {params.block_size} {params.indel} {params.merge} {params.w_rounds} \
-            --benchmark
+            --benchmark \
             &> {log}
         """
 
@@ -537,13 +555,22 @@ rule run_ntsynt_viz:
     log:
         f"ntsynt_viz.log",
     params:
-        prefix   = PREFIX,
-        treeflag = lambda wildcards, input: (f"--tree {p}" if (p := get_treefile_path(wildcards)) else ""),
+params:
+        prefix        = PREFIX,
+        treeflag      = lambda wildcards, input: (f"--tree {p}" if (p := get_treefile_path(wildcards)) else ""),
         ribbon_adjust = NTSYNT_VIZ_RIBBON_ADJUST,
-        block_length = f"--length {int(BLOCK_SIZE)}" if BLOCK_SIZE else "",
-        indel = f"--indel {INDEL}" if INDEL else "",
-        scale = f"--scale {SCALE}",
-        seq_length = f"--seq_length {int(SEQ_LENGTH)}" if SEQ_LENGTH else "",
+        block_length  = f"--length {VIZ_LENGTH}" if VIZ_LENGTH else (f"--length {int(BLOCK_SIZE)}" if BLOCK_SIZE else ""),
+        indel         = f"--indel {INDEL}" if INDEL else "",
+        scale         = f"--scale {SCALE}" if SCALE else "",
+        seq_length    = f"--seq_length {int(SEQ_LENGTH)}" if SEQ_LENGTH else "",
+        target_genome = f"--target-genome {TARGET_GENOME}" if TARGET_GENOME else "",
+        viz_format    = f"--format {VIZ_FORMAT}",
+        viz_width     = f"--width {VIZ_WIDTH}" if VIZ_WIDTH else "",
+        viz_dpi       = f"--dpi {VIZ_DPI}" if VIZ_DPI else "",
+        centromeres   = f"--centromeres ../{CENTROMERES}" if CENTROMERES else "",
+        viz_order     = f"--order ../{VIZ_ORDER}" if VIZ_ORDER else "",
+        viz_keep      = f"--keep {VIZ_KEEP}" if VIZ_KEEP else "",
+        no_arrow      = "--no-arrow" if NO_ARROW else "",
     run:
         shell(
         """
@@ -568,6 +595,10 @@ rule run_ntsynt_viz:
             --annotate-genome-info \
             {params.treeflag} {params.scale} \
             {params.block_length} {params.indel} {params.seq_length} \
+            {params.target_genome} \
+            {params.viz_format} {params.viz_width} {params.viz_dpi} \
+            {params.centromeres} {params.viz_order} {params.viz_keep} \
+            {params.no_arrow} \
             &> {log}
         cd ../
         touch {output.done}
