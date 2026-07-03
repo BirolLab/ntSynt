@@ -727,6 +727,7 @@ rule generate_report:
         abyss_fac     = f"{ASSEMBLY_DIR}/{PREFIX}_abyss_fac-summary.tsv",
         block_stats   = f"{NTSYNT_STEM}.synteny_blocks.stats.tsv",
         ribbon_plot   = rules.run_ntsynt_viz.output.out_html,
+        ribbon_plot_image = f"{VIZ_DIR}/{NTSYNT_VIZ_RIBBON_PLOT}",
         discontinuity = f"{NTSYNT_STEM}.discontinuity_reasons.tsv",
         mash_plot     = f"{MASH_DIR}/mash_divergence_boxplot.png",
     output:
@@ -742,6 +743,7 @@ rule generate_report:
          --abyss-fac     {input.abyss_fac} \
          --block-stats   {input.block_stats} \
           --ribbon-plot   {input.ribbon_plot} \
+          --ribbon-plot-img {input.ribbon_plot_image} \
           --discontinuity {input.discontinuity} \
           --mash-plot     {input.mash_plot} \
            --group         {params.group} \

@@ -515,7 +515,9 @@ def build_report(args: argparse.Namespace) -> str:
     sections_html.append(section("Mash divergence distributions", content, "divergence"))
 
     # 5. Ribbon plot
+    sections_html_pdf = sections_html.copy()
     if args.ribbon_plot and os.path.exists(args.ribbon_plot):
+        # Add to sections HTML
         with open(args.ribbon_plot, "r", encoding="utf-8") as f:
             widget_html = f.read()
         content = f"""
@@ -529,15 +531,31 @@ def build_report(args: argparse.Namespace) -> str:
             Source: {args.ribbon_plot}
         </figcaption>
         </figure>"""
+        
+        # Add to sections HTML for PDF (static image)
+        uri = encode_image(args.ribbon_plot_img)
+        content_pdf = f"""
+        <figure class="figure-wrap" style="max-width: 100%;">
+          <img src="{uri}" alt="ntSynt-viz ribbon plot" style="width: 100%;">
+          <figcaption>
+            ntSynt-viz ribbon plot showing synteny blocks across all assemblies.
+            Image: {args.ribbon_plot_img}
+          </figcaption>
+        </figure>"""
     else:
         content = "<p><em>Ribbon plot not found.</em></p>"
     sections_html.append(section("Synteny ribbon plot", content, "ribbon"))
+    sections_html_pdf.append(section("Synteny ribbon plot", content_pdf, "ribbon"))
 
     return HTML_TEMPLATE.format(
         group=html.escape(group_display),
         date=date_str,
         sections="\n".join(sections_html),
-    )
+        ), HTML_TEMPLATE.format(
+        group=html.escape(group_display),
+        date=date_str,
+        sections="\n".join(sections_html_pdf),
+        )   
 PDF_CSS = """
 @page {
     size: A4 portrait;
@@ -619,6 +637,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--abyss-fac",     metavar="TSV",  help="abyss-fac summary TSV")
     p.add_argument("--block-stats",   metavar="TSV",  help="ntSynt synteny block stats TSV")
     p.add_argument("--ribbon-plot",   metavar="HTML",  help="ntSynt-viz ribbon plot HTML")
+    p.add_argument("--ribbon-plot-img", metavar="SVG",  help="ntSynt-viz ribbon plot image (for PDF)")
     p.add_argument("--discontinuity", metavar="TSV",  help="Block discontinuity reasons TSV")
     p.add_argument("--mash-plot",     metavar="PNG",  help="Mash divergence boxplot PNG")
     p.add_argument("--group",         required=True,  help="Taxonomic group name (used in title)")
@@ -628,11 +647,11 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
-    report = build_report(args)
+    report, report_pdf = build_report(args)
     html_path = Path(args.output).with_suffix(".html")
     pdf_path = str(Path(args.output).with_suffix(".pdf"))
     html_path.write_text(report, encoding="utf-8")
-    save_pdf(report, pdf_path)
+    save_pdf(report_pdf, pdf_path)
     print(f"Reports written to {str(html_path)} and {pdf_path}.")
 
 
