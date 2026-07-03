@@ -63,6 +63,7 @@ VIZ_ORDER     = config.get("viz_order") or ""
 VIZ_KEEP      = config.get("viz_keep") or ""
 NO_ARROW      = config.get("no_arrow", False)
 NTSYNT_VIZ_RIBBON_ADJUST = config.get("ntsynt_viz_ribbon_adjust", 0.2)
+VIZ_OPTIMIZE_ORDERING = config.get("optimize_ordering") or ""
 
 NTSYNT_VIZ_RIBBON_PLOT = (
     f"{PREFIX}_ribbon-plot_tree.{VIZ_FORMAT}" if MAKE_TREE or TREEFILE
@@ -576,6 +577,7 @@ rule run_ntsynt_viz:
         viz_order     = f"--order ../{VIZ_ORDER}" if VIZ_ORDER else "",
         viz_keep      = f"--keep {VIZ_KEEP}" if VIZ_KEEP else "",
         no_arrow      = "--no-arrow" if NO_ARROW else "",
+        optimize_order = "--optimize-ordering" if VIZ_OPTIMIZE_ORDERING else "",
     run:
         shell(
             """

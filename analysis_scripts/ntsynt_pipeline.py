@@ -149,6 +149,9 @@ def parse_args() -> argparse.Namespace:
                     help="Genome:chromosome pairs to show in ntSynt-viz (e.g. --keep genome1:chr1 genome2:chr3).")
     opt.add_argument("--no-arrow", action="store_true",
                     help="Do not draw strand-flip arrows in ntSynt-viz for normalization.")
+    opt.add_argument("--optimize-ordering", action="store_true",
+                    help="Optimize tree-guided genome sorting using inversions. "
+                    "Only use with strictly bifurcating trees.")
     
     # ------------------------------------------------------------------
     # Snakemake execution options
@@ -205,6 +208,7 @@ def build_config(args: argparse.Namespace) -> dict:
         "viz_order":     args.order,
         "viz_keep":      " ".join(args.keep) if args.keep else "",
         "no_arrow":      args.no_arrow,
+        "optimize_ordering": args.optimize_ordering if args.optimize_ordering else "",
     }
 
 

@@ -34,7 +34,6 @@ visualisations.
 * seqtk
 * weasyprint
 * mafft
-* mashtree 1.4.6
 * iqtree
 
 ---

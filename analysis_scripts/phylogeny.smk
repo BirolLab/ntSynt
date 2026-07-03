@@ -506,24 +506,27 @@ rule iqtree:
 # Nuclear tree: mashtree
 # ===========================================================================
 
-rule mashtree:
+rule mash_sketch_full:
     input:
         fasta_list = FASTA_LIST,
+    output:
+        dists = f"{MT_DIR}/nuclear_mashtree.dists",
+    threads: THREADS
+    shell:
+        r"""
+        mash triangle -p {threads} -l {input.fasta_list} > {output.dists}
+        awk 'BEGIN{{FS=OFS="\t"}} {{sub(".*/","",$1); print}}' {output.dists} > {output.dists}.tmp
+        mv {output.dists}.tmp {output.dists}
+        """
+
+rule quicktree:
+    input:
+        rules.mash_sketch_full.output.dists
     output:
         tree = f"{MT_DIR}/nuclear_mashtree.nwk",
     threads: THREADS
     shell:
-        r"""
-        set -eux -o pipefail
-        genome_size=$(cat $(head -n1 {input.fasta_list}) | awk '/^>/{{next}} {{size += length($0)}} END{{print size}}')
-
-        # Build file-of-files from fasta list
-        fastas=$(cat {input.fasta_list}  |tr "\n" " ")
-        mashtree.pl --numcpus {threads} \
-            --genomesize ${{genome_size}} --tempdir tmp \
-            ${{fastas}} \
-            > {output.tree} 
-        """
+        "quicktree -in m -out t {input} > {output.tree}"
 
 
 # ===========================================================================
@@ -579,9 +582,7 @@ rule make_mt_name_conversion:
 
             if nuclear:
                 # Leaf labels are filename stems (assembly accessions) — map directly
-                with open(output.mt_name_conv, "w") as out:
-                    for acc, species in acc_to_species.items():
-                        out.write(f"{acc}.chr\t{species}\n")
+                os.symlink(input.name_conv, output.mt_name_conv)
             else:
                 # Join via sequence report: GenBank seq accession -> assembly accession
                 with open(input.seq_report, newline="") as fh, \
