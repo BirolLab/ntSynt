@@ -387,10 +387,12 @@ rule mash_sketch_full:
         fasta_list = FASTA_LIST,
     output:
         dist = f"{MASH_DIR}/full_assemblies_dist.tsv",
+    params:
+        sketch_size = 50000
     threads: workflow.cores
     shell:
         r"""
-        mash triangle -p {threads} -E -l {input.fasta_list} > {output.dist}
+        mash triangle -p {threads} -s {params.sketch_size} -E -l {input.fasta_list} > {output.dist}
         """
 
 # ===========================================================================
@@ -658,6 +660,7 @@ rule mash_regions:
         dist = f"{MASH_DIR}/{{region_type}}_dists.tsv",
     params:
         regions = f"synteny_regions",
+        sketch_size = 50000
     threads: workflow.cores
     shell:
         r"""
@@ -667,7 +670,7 @@ rule mash_regions:
         # Build a temporary file list for this region type
         fa_list=$(ls {params.regions}/*.{wildcards.region_type}.fa)
         echo ${{fa_list}}
-        mash triangle -p {threads} -E ${{fa_list}} > {output.dist}
+        mash triangle -p {threads} -s {params.sketch_size} -E ${{fa_list}} > {output.dist}
         """
 
 

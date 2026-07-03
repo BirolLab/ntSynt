@@ -506,9 +506,11 @@ rule mash_sketch_full:
     output:
         dists = f"{MT_DIR}/nuclear_mashtree.dists",
     threads: workflow.cores
+    params:
+        sketch_size = 50000
     shell:
         r"""
-        mash triangle -p {threads} -l {input.fasta_list} > {output.dists}
+        mash triangle -p {threads} -s {params.sketch_size} -l {input.fasta_list} > {output.dists}
         awk 'BEGIN{{FS=OFS="\t"}} {{sub(".*/","",$1); print}}' {output.dists} > {output.dists}.tmp
         mv {output.dists}.tmp {output.dists}
         """
