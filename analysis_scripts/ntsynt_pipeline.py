@@ -157,6 +157,8 @@ def parse_args() -> argparse.Namespace:
     # Snakemake execution options
     # ------------------------------------------------------------------
     smk = p.add_argument_group("snakemake options")
+    smk.add_argument("--kmc", help="Run optional minimizer stats using KMC - requires KMC3 to be installed.",
+                                 action="store_true")
     smk.add_argument("--cores", type=int, default=12,
                      help="Number of CPU cores to use.")
     smk.add_argument("--dry-run", "-n", action="store_true",
@@ -275,6 +277,9 @@ def build_snakemake_cmd(args: argparse.Namespace, config: dict) -> list[str]:
         cmd += ["--until", rule]
 
     cmd += args.snakemake_args
+    
+    if args.kmc:
+        cmd += ["all", "kmc"]
 
     return cmd
 

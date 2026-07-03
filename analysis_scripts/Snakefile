@@ -119,7 +119,6 @@ rule all:
         # ntSynt outputs
         BLOCKS_TSV,
         f"{NTSYNT_STEM}.synteny_blocks.stats.tsv",
-        f"{NTSYNT_STEM}.mx.stats.tsv",
         # ntSynt-viz
         f"{VIZ_DIR}/ntsynt_viz.done",
         # Syntenic / non-syntenic FASTAs
@@ -132,7 +131,9 @@ rule all:
         f"{PREFIX}_ntsynt_report.html",
         f"{PREFIX}_ntsynt_report.pdf",
 
-
+rule kmc:
+    input:
+        f"{NTSYNT_STEM}.mx.stats.tsv",
 
 
 # ===========================================================================
