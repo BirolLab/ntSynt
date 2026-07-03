@@ -160,25 +160,22 @@ rule download_assemblies_ncbi:
     output:
         done    = f"{ASSEMBLY_DIR}/download.done",
     params:
-        family_low = PREFIX,
+        prefix = PREFIX,
         outdir     = ASSEMBLY_DIR,
     shell:
         """
-        # ------------------------------------------------------------------
-        # 3. Download with NCBI datasets.
-        # ------------------------------------------------------------------
         datasets download genome accession \
             --include genome \
             --assembly-level complete,chromosome \
             --inputfile {input.accfile} \
-            --filename {params.outdir}/{params.family_low}_assemblies.zip
+            --filename {params.outdir}/{params.prefix}_assemblies.zip
 
-        unzip -o {params.outdir}/{params.family_low}_assemblies.zip \
-              -d {params.outdir}/{params.family_low}_assemblies
-        rm -f {params.outdir}/{params.family_low}_assemblies.zip
+        unzip -o {params.outdir}/{params.prefix}_assemblies.zip \
+              -d {params.outdir}/{params.prefix}_assemblies
+        rm -f {params.outdir}/{params.prefix}_assemblies.zip
 
         # Reset timestamps on all extracted files to avoid Snakemake mtime issues
-        find {params.outdir}/{params.family_low}_assemblies -exec touch {{}} \\; 
+        find {params.outdir}/{params.prefix}_assemblies -exec touch {{}} \\; 
 
         touch {output.done}
         """
@@ -206,7 +203,7 @@ rule filter_assemblies_to_chromosomes:
         f"{ASSEMBLY_DIR}/filter_chromosomes.log",
     shell:
         r"""
-        set -euo pipefail
+        set -eux -o pipefail
 
         while read -r accession; do
             accession=${{accession%$'\r'}}   # strip Windows line endings
@@ -271,7 +268,7 @@ rule stage_genomes:
         f"{ASSEMBLY_DIR}/stage_genomes.log",
     shell:
         r"""
-        set -euo pipefail
+        set -eux -o pipefail
         while read -r genome_path; do
             base=$(basename ${{genome_path}})
             full_path=$(realpath ${{genome_path}})
@@ -382,7 +379,7 @@ rule abyss_fac_stats:
 
 
 # ===========================================================================
-# 6. Mash — sketch and all-vs-all dist on full assemblies
+# Mash — sketch and all-vs-all dist on full assemblies
 # ===========================================================================
 
 rule mash_sketch_full:
@@ -390,13 +387,14 @@ rule mash_sketch_full:
         fasta_list = FASTA_LIST,
     output:
         dist = f"{MASH_DIR}/full_assemblies_dist.tsv",
+    threads: workflow.cores
     shell:
         r"""
-        mash triangle -p 4 -E -l {input.fasta_list} > {output.dist}
+        mash triangle -p {threads} -E -l {input.fasta_list} > {output.dist}
         """
 
 # ===========================================================================
-# 7. Extract max mash distance → divergence for ntSynt
+# Extract max mash distance → divergence for ntSynt
 # ===========================================================================
 
 rule max_mash_dist:
@@ -412,7 +410,7 @@ rule max_mash_dist:
         """
 
 # ===========================================================================
-# 8. Run ntSynt
+# Run ntSynt
 # ===========================================================================
 
 rule run_ntsynt:
@@ -423,7 +421,7 @@ rule run_ntsynt:
         blocks = BLOCKS_TSV,
     log:
         f"ntsynt.log",
-    threads: workflow.cores
+    threads: workflow.threads
     params:
         fpr      = FPR,
         hashes   = f"--hashes {HASHES}" if HASHES else "",
@@ -450,7 +448,7 @@ rule run_ntsynt:
 
 
 # ===========================================================================
-# 9. ntSynt block stats
+# ntSynt block stats
 # ===========================================================================
 
 rule ntsynt_block_stats:
@@ -471,7 +469,7 @@ rule ntsynt_block_stats:
         """
 
 # ===========================================================================
-# 10. ntSynt minimizer stats
+# ntSynt minimizer stats - optional
 # ===========================================================================
 
 rule ntsynt_mx_stats:
@@ -519,7 +517,7 @@ rule finalize_name_conversion:
             os.symlink(os.path.abspath(input.name_conv), output.format_name_conv)
 
 # ===========================================================================
-# 11. ntSynt-viz
+# ntSynt-viz
 # ===========================================================================
 
 def get_treefile(wildcards):
@@ -542,12 +540,13 @@ rule make_tree:
         name_conv = rules.finalize_name_conversion.output.format_name_conv
     output:
         tree = f"phylogeny/tree/{PREFIX}.nwk"
+    threads: workflow.cores
     params:
         mt_source = "--mt-source user-fasta" if MT_GENOMES else "",
         mt_assemblies = f"--mt-fasta {MT_GENOMES}" if MT_GENOMES else "",
         name_conv = lambda wildcards, input: MT_NAME_CONVERSIONS if MT_GENOMES else input.name_conv,
     shell:
-        "run_phylogeny.py --prefix {PREFIX} --name-conversion {params.name_conv} {params.mt_source} {params.mt_assemblies}"
+        "run_phylogeny.py --prefix {PREFIX} --name-conversion {params.name_conv} {params.mt_source} {params.mt_assemblies} --cores {threads}"
 
 rule run_ntsynt_viz:
     input:
@@ -616,12 +615,12 @@ rule run_ntsynt_viz:
 
 
 # ===========================================================================
-# 12. Extract syntenic / non-syntenic regions per assembly
+# Extract syntenic / non-syntenic regions per assembly
 # ===========================================================================
 
 rule extract_synteny_regions:
     """
-    Runs extract_synteny_regions.py (the script supplied with this pipeline).
+    Runs extract_synteny_regions.py.
     Produces <accession>.syntenic.fa and <accession>.non_syntenic.fa for
     every assembly present in the synteny blocks TSV.
     """
@@ -635,7 +634,7 @@ rule extract_synteny_regions:
         regions = f"synteny_regions",
     shell:
         r"""
-        set -euo pipefail
+        set -eux -o pipefail
         mkdir -p {params.regions}
         fastas=$(cat {input.fasta_list} | tr "\n" " ")
         python3 {params.script} \
@@ -647,7 +646,7 @@ rule extract_synteny_regions:
 
 
 # ===========================================================================
-# 13. Mash on syntenic / non-syntenic regions
+# Mash on syntenic / non-syntenic regions
 # ===========================================================================
 
 rule mash_regions:
@@ -659,8 +658,7 @@ rule mash_regions:
         dist = f"{MASH_DIR}/{{region_type}}_dists.tsv",
     params:
         regions = f"synteny_regions",
-        threads = lambda wildcards, threads: threads,
-    threads: 4
+    threads: workflow.cores
     shell:
         r"""
         set -euo pipefail
@@ -669,12 +667,12 @@ rule mash_regions:
         # Build a temporary file list for this region type
         fa_list=$(ls {params.regions}/*.{wildcards.region_type}.fa)
         echo ${{fa_list}}
-        mash triangle -p {params.threads} -E ${{fa_list}} > {output.dist}
+        mash triangle -p {threads} -E ${{fa_list}} > {output.dist}
         """
 
 
 # ===========================================================================
-# 14. Tally block discontinuity reasons
+# Tally block discontinuity reasons
 # ===========================================================================
 
 rule discontinuity_reasons:
@@ -685,7 +683,7 @@ rule discontinuity_reasons:
         tsv = f"{NTSYNT_STEM}.discontinuity_reasons.tsv",
     shell:
         r"""
-        set -euo pipefail
+        set -eux -o pipefail
         cat {input.blocks} | mlr --tsv --implicit-csv-header label block_id,genome,chrom,start,end,strand,n_mx,discontinuity_reason \
             then uniq -g discontinuity_reason,block_id  \
             then stats1 -a count -f discontinuity_reason -g discontinuity_reason \
@@ -712,7 +710,7 @@ rule plot_divergences:
         script      = f"{SCRIPTS}/plot_dists.R",
     shell:
         r"""
-        set -euo pipefail
+        set -eux -o pipefail
         cd {params.mash_dir}
         Rscript {params.script}
         """

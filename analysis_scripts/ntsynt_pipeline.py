@@ -3,37 +3,10 @@
 run_pipeline.py  –  driver for the multi-genome synteny Snakemake pipeline.
 
 Builds the pipeline config from command-line arguments and launches Snakemake
-programmatically, so no config.yaml needs to be maintained by hand.
-
-Usage examples
---------------
-# Dry-run (print what would be done)
-python run_pipeline.py \
-    --accessions assemblies.tsv \
-    --group ichneumonidae \
-    --date 250528 \
-    --block-stats-script /path/to/ntSynt/analysis_scripts/denovo_synteny_block_stats.py \
-    --mx-stats-script    /path/to/synteny/scripts/analyze_mx.py \
-    --dry-run
-
-# Real run, 16 cores
-python run_pipeline.py \
-    --accessions assemblies.tsv \
-    --group ichneumonidae \
-    --date 250528 \
-    --block-stats-script /path/to/denovo_synteny_block_stats.py \
-    --mx-stats-script    /path/to/analyze_mx.py \
-    --cores 16
-
-# With an optional tree file for ntSynt-viz
-python run_pipeline.py ... --tree species.nwk
-
-# Force-rerun specific rules
-python run_pipeline.py ... --forcerun run_ntsynt plot_divergences
+programmatically.
 """
 
 import argparse
-import datetime
 import subprocess
 import sys
 import json
@@ -66,7 +39,9 @@ def parse_args() -> argparse.Namespace:
     req.add_argument(
         "--accessions", required=False, metavar="TSV",
         help=(
-            "TSV listing NCBI genome accessions to use - one per line"
+            "TSV listing NCBI genome accessions to use - one per line.\n"
+            "NOTE: Only chromosomes are retained after downloading accessions -"
+            "if different behaviour is desired, use --genomes instead."
         ),
     )
     req.add_argument(
@@ -159,8 +134,8 @@ def parse_args() -> argparse.Namespace:
     smk = p.add_argument_group("snakemake options")
     smk.add_argument("--kmc", help="Run optional minimizer stats using KMC - requires KMC3 to be installed.",
                                  action="store_true")
-    smk.add_argument("--cores", type=int, default=12,
-                     help="Number of CPU cores to use.")
+    smk.add_argument("--threads", type=int, default=12,
+                     help="Number of threads to use.")
     smk.add_argument("--dry-run", "-n", action="store_true",
                      help="Perform a dry run (print rules, do not execute).")
     smk.add_argument("--forcerun", nargs="*", metavar="RULE",
@@ -251,7 +226,7 @@ def build_snakemake_cmd(args: argparse.Namespace, config: dict) -> list[str]:
     cmd = [
         "snakemake",
         "--snakefile", str(SNAKEFILE),
-        "--cores",     str(args.cores),
+        "--cores",     str(args.threads),
         "--printshellcmds",
         "--nolock",
     ]

@@ -1,27 +1,6 @@
 #!/usr/bin/env python3
 """
 run_phylogeny.py  —  driver for the phylogenetic tree Snakemake pipeline.
-
-Builds config from command-line arguments, auto-fills paths shared with the
-master pipeline, and launches phylogeny.smk.
-
-Usage examples
---------------
-# Auto-detect MT source - download more MT if needed, or fall-back on nuclear otherwise
-python run_phylogeny.py \
-    --group lucinidae \
-    --date  26-06-02 
-
-# Force nuclear tree
-python run_phylogeny.py \
-    --group lucinidae --date 26-06-02 \
-    --mt-source nuclear 
-
-# User-supplied MT FASTA
-python run_phylogeny.py \
-    --group lucinidae --date 26-06-02 \
-    --mt-source user-fasta \
-    --mt-fasta  /path/to/mt_assemblies.fa 
 """
 
 import argparse
@@ -34,6 +13,7 @@ SCRIPTS_DIR = Path(__file__).parent
 
 
 def parse_args() -> argparse.Namespace:
+    "Parse command-line arguments"
     p = argparse.ArgumentParser(
         description="Run the phylogenetic tree pipeline.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
@@ -69,8 +49,6 @@ def parse_args() -> argparse.Namespace:
     # Optional overrides
     # ------------------------------------------------------------------
     opt = p.add_argument_group("optional parameters")
-    opt.add_argument("--threads", type=int, default=12,
-                     help="Number of threads for mafft, iqtree, mashtree.")
     opt.add_argument("--greedy-download", help="Download all possible genomes, even if falling back to nuclear genomes",
                      action="store_true")
 
