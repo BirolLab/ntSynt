@@ -35,6 +35,7 @@ visualisations.
 * weasyprint
 * mafft
 * iqtree
+* pigz
 
 ---
 

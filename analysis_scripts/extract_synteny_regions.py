@@ -23,6 +23,9 @@ import argparse
 import os
 import subprocess
 import sys
+import gzip
+import shutil
+import tempfile
 from collections import defaultdict
 
 
@@ -124,9 +127,23 @@ def write_bed(intervals, bed_path: str, genome_file: str) -> None:
 # Extract FASTA sequences
 # ---------------------------------------------------------------------------
 
+
 def getfasta(fasta: str, bed: str, out_fa: str) -> None:
-    """Run bedtools getfasta to pull sequences defined by a BED file."""
-    run(f"bedtools getfasta -fi {fasta} -bed {bed} -fo {out_fa}")
+    """Run bedtools getfasta to pull sequences defined by a BED file.
+    """
+    if fasta.endswith(".gz"):
+        fd, tmp_fasta = tempfile.mkstemp(suffix=".fa", dir=os.getcwd())
+        try:
+            with gzip.open(fasta, "rb") as f_in, os.fdopen(fd, "wb") as f_out:
+                shutil.copyfileobj(f_in, f_out)
+            run(f"bedtools getfasta -fi {tmp_fasta} -bed {bed} -fo {out_fa}")
+        finally:
+            os.remove(tmp_fasta)
+            fai = f"{tmp_fasta}.fai"
+            if os.path.exists(fai):
+                os.remove(fai)
+    else:
+        run(f"bedtools getfasta -fi {fasta} -bed {bed} -fo {out_fa}")
 
 
 # ---------------------------------------------------------------------------

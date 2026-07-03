@@ -81,7 +81,6 @@ def build_config(args: argparse.Namespace) -> dict:
         "mt_source":            args.mt_source,
         "mt_fasta":             args.mt_fasta,
         "prefix":               args.prefix,
-        "threads":              args.threads,
         "scripts_dir":     str(SCRIPTS_DIR.resolve()),
         "greedy_download": True if args.greedy_download else False
     }

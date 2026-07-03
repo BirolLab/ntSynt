@@ -98,7 +98,7 @@ W_ROUNDS = config.get("w_rounds") or ""
 
 def get_fastas(_=None):
     """Return list of *.fna paths under the NCBI data directory."""
-    return [os.path.abspath(f) for f in glob.glob(f"{NCBI_DATA_DIR}/**/*.chr.fa", recursive=True)]
+    return [os.path.abspath(f) for f in glob.glob(f"{NCBI_DATA_DIR}/**/*.chr.fa.gz", recursive=True)]
 
 
 def get_fai_list(_=None):
@@ -188,7 +188,7 @@ rule filter_assemblies_to_chromosomes:
     """
     For each downloaded assembly, filter the sequence report to
     assembled-molecule chromosomes, then extract those sequences
-    with seqtk subseq into <accession>.chr.fa alongside the original *.fna.
+    with seqtk subseq into <accession>.chr.fa.gz alongside the original *.fna.
     Also writes a per-accession <accession>.chromosomes.tsv for reference.
     """
     input:
@@ -236,12 +236,12 @@ rule filter_assemblies_to_chromosomes:
             fi
 
             # Extract chromosome sequences using seqtk subseq
-            out={params.fasta_root}/${{accession}}/${{accession}}.chr.fa
+            out={params.fasta_root}/${{accession}}/${{accession}}.chr.fa.gz
             seqtk subseq "$fasta" \
-                <(mlr --tsv cut -f "GenBank seq accession" "$chr_tsv" | tail -n +2) \
+                <(mlr --tsv cut -f "GenBank seq accession" "$chr_tsv" | tail -n +2) |pigz \
                 > "$out"
-
-            samtools faidx "$out"
+            pigz "$fasta"
+            gunzip -c "$out" | samtools faidx -o "$out".fai -
             echo "  Written: $out" | tee -a {log}
 
         done < {input.accfile}
@@ -306,16 +306,20 @@ checkpoint index_fastas:
                 set -eux -o pipefail
                 while read -r genome_file; do 
                     base=$(basename ${{genome_file}})
-                    samtools faidx "{ASSEMBLY_DIR}/${{base}}"
+                    if [[ "${{base}}" == *.gz ]]; then
+                        gunzip -c "${{full_path}}" | samtools faidx -o "${{full_path}}.fai"  -
+                    else
+                        samtools faidx "${{full_path}}"
+                    fi                
                 done < {GENOMES}
                 touch {output.done}
                 """)
         else:
             shell(r"""
                 set -eux -o pipefail
-                find {NCBI_DATA_DIR} -name '*.chr.fa' | while read fa; do
+                find {NCBI_DATA_DIR} -name '*.chr.fa.gz' | while read fa; do
                     if [ ! -f "$fa.fai" ]; then
-                        samtools faidx "$fa"
+                        gunzip -c "$fa" | samtools faidx -o "${{fa}}.fai" -
                     fi
                 done
                 touch {output.done}
@@ -336,7 +340,7 @@ rule list_fastas:
         fastas = get_fastas()
         if not fastas:
             raise ValueError(
-                f"No *.chr.fa files found under {NCBI_DATA_DIR}. "
+                f"No *.chr.fa.gz files found under {NCBI_DATA_DIR}. "
                 "Check that download_assemblies completed successfully."
             )
         with open(output.fasta_list, "w") as fh:
@@ -423,7 +427,7 @@ rule run_ntsynt:
         blocks = BLOCKS_TSV,
     log:
         f"ntsynt.log",
-    threads: workflow.threads
+    threads: workflow.cores
     params:
         fpr      = FPR,
         hashes   = f"--hashes {HASHES}" if HASHES else "",
@@ -514,7 +518,7 @@ rule finalize_name_conversion:
                     if not line:
                         continue
                     accession, new_name = line.split("\t")
-                    outfile.write(f"{accession}.chr.fa\t{new_name}\n")
+                    outfile.write(f"{accession}.chr.fa.gz\t{new_name}\n")
         if GENOMES:
             os.symlink(os.path.abspath(input.name_conv), output.format_name_conv)
 

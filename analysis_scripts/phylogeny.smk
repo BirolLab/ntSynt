@@ -567,7 +567,7 @@ rule make_mt_name_conversion:
                 os.symlink(input.name_conv, output.mt_name_conv)
             else:
                 # Build accession -> species name from name conversion file
-                # Filenames like GCA_965165685.3.chr.fa -> extract accession prefix
+                # Filenames like GCA_965165685.3.chr.fa.gz -> extract accession prefix
                 acc_to_species = {}
                 with open(input.name_conv) as fh:
                     for line in fh:
