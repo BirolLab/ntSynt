@@ -286,6 +286,33 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       display: inline-block;
       max-width: 100%;
     }}
+    
+    #ribbon .figure-wrap {{
+        display: block;
+        width: 100%;
+        padding: 1rem;
+    }}
+
+    #ribbon .ribbon-widget {{
+        width: 100%;
+        max-width: 100%;
+        overflow-x: auto;
+        display: block;
+    }}
+
+    #ribbon .ribbon-widget > div {{
+        width: 100% !important;
+        height: 100% !important;
+    }}
+
+    #ribbon .ribbon-widget svg {{
+        width: 100% !important;
+        height: 100% !important;
+    }}
+    
+    .html-widget, .girafe_container {{
+      height: auto !important;
+    }}
 
     .figure-wrap img {{
       display: block;
@@ -487,16 +514,20 @@ def build_report(args: argparse.Namespace) -> str:
         content = "<p><em>Mash divergence plot not found.</em></p>"
     sections_html.append(section("Mash divergence distributions", content, "divergence"))
 
-# 5. Ribbon plot
+    # 5. Ribbon plot
     if args.ribbon_plot and os.path.exists(args.ribbon_plot):
-        uri = encode_image(args.ribbon_plot)
+        with open(args.ribbon_plot, "r", encoding="utf-8") as f:
+            widget_html = f.read()
         content = f"""
         <figure class="figure-wrap" style="max-width: 100%;">
-          <img src="{uri}" alt="ntSynt-viz ribbon plot" style="width: 100%;">
-          <figcaption>
+        <div class="ribbon-widget">
+        {widget_html}
+        </div>
+        <figcaption>
             ntSynt-viz ribbon plot showing synteny blocks across all assemblies.
-            Image: {args.ribbon_plot}
-          </figcaption>
+            Interactive — hover to highlight, click to pin tooltips.
+            Source: {args.ribbon_plot}
+        </figcaption>
         </figure>"""
     else:
         content = "<p><em>Ribbon plot not found.</em></p>"
@@ -559,6 +590,7 @@ img {
     width: 100%;
 }
 
+
 """
 
 
@@ -586,7 +618,7 @@ def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Generate a self-contained HTML report for an ntSynt run.")
     p.add_argument("--abyss-fac",     metavar="TSV",  help="abyss-fac summary TSV")
     p.add_argument("--block-stats",   metavar="TSV",  help="ntSynt synteny block stats TSV")
-    p.add_argument("--ribbon-plot",   metavar="PNG",  help="ntSynt-viz ribbon plot PNG")
+    p.add_argument("--ribbon-plot",   metavar="HTML",  help="ntSynt-viz ribbon plot HTML")
     p.add_argument("--discontinuity", metavar="TSV",  help="Block discontinuity reasons TSV")
     p.add_argument("--mash-plot",     metavar="PNG",  help="Mash divergence boxplot PNG")
     p.add_argument("--group",         required=True,  help="Taxonomic group name (used in title)")

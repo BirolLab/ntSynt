@@ -49,8 +49,8 @@ W         = config["ntsynt_w"]
 SCRIPTS   = config["scripts_dir"]           
 TREEFILE  = config.get("treefile", "")
 MAKE_TREE = config.get("make_tree", False)
-MT_GENOMES = config.get("mt_genomes", "")
-MT_NAME_CONVERSIONS = config.get("mt_name_conversions", "")
+MT_GENOMES = config.get("mt_genomes") or ""
+MT_NAME_CONVERSIONS = config.get("mt_name_conversions") or ""
 
 HASHES        = config.get("hashes") or ""
 TARGET_GENOME = config.get("target_genome") or ""
@@ -67,6 +67,11 @@ NTSYNT_VIZ_RIBBON_ADJUST = config.get("ntsynt_viz_ribbon_adjust", 0.2)
 NTSYNT_VIZ_RIBBON_PLOT = (
     f"{PREFIX}_ribbon-plot_tree.{VIZ_FORMAT}" if MAKE_TREE or TREEFILE
     else f"{PREFIX}_ribbon-plot.{VIZ_FORMAT}"
+)
+
+NTSYNT_VIZ_RIBBON_PLOT_HTML = (
+    f"{PREFIX}_ribbon-plot_tree.html" if MAKE_TREE or TREEFILE
+    else f"{PREFIX}_ribbon-plot.html"
 )
 
 ASSEMBLY_DIR  = f"{PREFIX}_assemblies"
@@ -538,7 +543,7 @@ rule make_tree:
     params:
         mt_source = "--mt-source user-fasta" if MT_GENOMES else "",
         mt_assemblies = f"--mt-fasta {MT_GENOMES}" if MT_GENOMES else "",
-        name_conv = f"{MT_NAME_CONVERSIONS}" if MT_GENOMES else {input.name_conv},
+        name_conv = lambda wildcards, input: MT_NAME_CONVERSIONS if MT_GENOMES else input.name_conv,
     shell:
         "run_phylogeny.py --prefix {PREFIX} --name-conversion {params.name_conv} {params.mt_source} {params.mt_assemblies}"
 
@@ -551,11 +556,11 @@ rule run_ntsynt_viz:
     output:
         links = f"{VIZ_DIR}/{PREFIX}.sequence_lengths.sorted.tsv",
         done = f"{VIZ_DIR}/ntsynt_viz.done",
-        out_plot = f"{VIZ_DIR}/{NTSYNT_VIZ_RIBBON_PLOT}"
+        out_plot = f"{VIZ_DIR}/{NTSYNT_VIZ_RIBBON_PLOT}",
+        out_html = f"{VIZ_DIR}/{NTSYNT_VIZ_RIBBON_PLOT_HTML}"
     log:
         f"ntsynt_viz.log",
     params:
-params:
         prefix        = PREFIX,
         treeflag      = lambda wildcards, input: (f"--tree {p}" if (p := get_treefile_path(wildcards)) else ""),
         ribbon_adjust = NTSYNT_VIZ_RIBBON_ADJUST,
@@ -573,35 +578,36 @@ params:
         no_arrow      = "--no-arrow" if NO_ARROW else "",
     run:
         shell(
-        """
-        set -eux -o pipefail
-        mkdir -p {VIZ_DIR} && cd {VIZ_DIR}
-        find ../{NCBI_DATA_DIR} -name '*.fai' > fais.txt
-        """
-        )
+            """
+            set -eux -o pipefail
+            mkdir -p {VIZ_DIR} && cd {VIZ_DIR}
+            find ../{NCBI_DATA_DIR} -name '*.fai' > fais.txt
+            """
+            )
         with open(f"{VIZ_DIR}/fais.txt", 'r') as f:
             lines = f.readlines()
             num_assemblies = len(lines)
         height = max(min(num_assemblies * 2, 75), 20)
         shell("""
-        cd {VIZ_DIR}
-        ntsynt_viz.py --blocks ../{input.blocks} \
-            --fai fais.txt \
-            --name_conversion ../{input.name_conv} \
-            --prefix {params.prefix} \
-            --normalize \
-            --ribbon_adjust {params.ribbon_adjust} \
-            --height {height} \
-            --annotate-genome-info \
-            {params.treeflag} {params.scale} \
-            {params.block_length} {params.indel} {params.seq_length} \
-            {params.target_genome} \
-            {params.viz_format} {params.viz_width} {params.viz_dpi} \
-            {params.centromeres} {params.viz_order} {params.viz_keep} \
-            {params.no_arrow} \
-            &> {log}
-        cd ../
-        touch {output.done}
+            set -eux -o pipefail
+            cd {VIZ_DIR}
+            ntsynt_viz.py --blocks ../{input.blocks} \
+                --fai fais.txt \
+                --name_conversion ../{input.name_conv} \
+                --prefix {params.prefix} \
+                --normalize \
+                --ribbon_adjust {params.ribbon_adjust} \
+                --height {height} \
+                --annotate-genome-info \
+                {params.treeflag} {params.scale} \
+                {params.block_length} {params.indel} {params.seq_length} \
+                {params.target_genome} \
+                {params.viz_format} {params.viz_width} {params.viz_dpi} \
+                {params.centromeres} {params.viz_order} {params.viz_keep} \
+                {params.no_arrow} \
+                &> {log}
+            cd ../
+            touch {output.done}
         """
         )
 
@@ -720,7 +726,7 @@ rule generate_report:
     input:
         abyss_fac     = f"{ASSEMBLY_DIR}/{PREFIX}_abyss_fac-summary.tsv",
         block_stats   = f"{NTSYNT_STEM}.synteny_blocks.stats.tsv",
-        ribbon_plot   = rules.run_ntsynt_viz.output.out_plot,
+        ribbon_plot   = rules.run_ntsynt_viz.output.out_html,
         discontinuity = f"{NTSYNT_STEM}.discontinuity_reasons.tsv",
         mash_plot     = f"{MASH_DIR}/mash_divergence_boxplot.png",
     output:
