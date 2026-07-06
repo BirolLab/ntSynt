@@ -3,8 +3,8 @@
 extract_synteny_regions.py
 
 For each genome assembly in a multi-genome ntSynt synteny block TSV, extract:
-  1. Syntenic regions         -> <genome_basename>.syntenic.fa
-  2. Non-syntenic regions     -> <genome_basename>.non_syntenic.fa
+  1. Syntenic regions         -> <genome_name>.syntenic.fa
+  2. Non-syntenic regions     -> <genome_name>.non_syntenic.fa
 
 Dependencies: bedtools, samtools (for faidx), Python 3.6+
 
@@ -199,7 +199,6 @@ def main() -> None:
             continue
 
         fasta = fasta_map[genome_name]
-        base  = os.path.splitext(genome_name)[0]   # strip .fa / .fasta
         print(f"\n{'='*60}")
         print(f"Processing {genome_name}  ({len(intervals)} syntenic intervals)")
         print(f"{'='*60}")
@@ -208,18 +207,18 @@ def main() -> None:
         ensure_fai(fasta)
 
         # 2. Write syntenic BED directly from TSV intervals (non-overlapping)
-        syntenic_bed = os.path.join(args.outdir, f"{base}.syntenic.bed")
+        syntenic_bed = os.path.join(args.outdir, f"{genome_name}.syntenic.bed")
         print(f"  Writing syntenic BED -> {syntenic_bed}")
         write_bed(intervals, syntenic_bed, fai_path(fasta))
 
         # 3. Non-syntenic BED via bedtools complement
-        non_syntenic_bed = os.path.join(args.outdir, f"{base}.non_syntenic.bed")
+        non_syntenic_bed = os.path.join(args.outdir, f"{genome_name}.non_syntenic.bed")
         print(f"  Computing non-syntenic BED (complement) -> {non_syntenic_bed}")
         run(f"bedtools complement -i {syntenic_bed} -g {fai_path(fasta)} > {non_syntenic_bed}")
 
         # 4. Extract FASTAs
-        syntenic_fa     = os.path.join(args.outdir, f"{base}.syntenic.fa")
-        non_syntenic_fa = os.path.join(args.outdir, f"{base}.non_syntenic.fa")
+        syntenic_fa     = os.path.join(args.outdir, f"{genome_name}.syntenic.fa")
+        non_syntenic_fa = os.path.join(args.outdir, f"{genome_name}.non_syntenic.fa")
 
         print(f"  Extracting syntenic sequences     -> {syntenic_fa}")
         getfasta(fasta, syntenic_bed, syntenic_fa)

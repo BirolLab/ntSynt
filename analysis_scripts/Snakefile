@@ -710,17 +710,19 @@ rule plot_divergences:
         full_dists  = f"{MASH_DIR}/full_assemblies_dist.tsv",
         syntenic    = f"{MASH_DIR}/syntenic_dists.tsv",
         nonsyntenic = f"{MASH_DIR}/non_syntenic_dists.tsv",
+        name_conv = rules.finalize_name_conversion.output.format_name_conv,
     output:
         pdf = f"{MASH_DIR}/mash_divergence_boxplot.pdf",
         png = f"{MASH_DIR}/mash_divergence_boxplot.png",
+        html = f"{MASH_DIR}/mash_divergence_boxplot.html"
     params:
         mash_dir = MASH_DIR,
         script      = f"{SCRIPTS}/plot_dists.R",
+        out_prefix = f"{MASH_DIR}/mash_divergence_boxplot"
     shell:
         r"""
         set -eux -o pipefail
-        cd {params.mash_dir}
-        Rscript {params.script}
+        Rscript {params.script} --full {input.full_dists} --syntenic {input.syntenic} --non-syntenic {input.nonsyntenic} --name-conversions {input.name_conv} -o {params.out_prefix}
         """
 
 # ===========================================================================
@@ -738,7 +740,8 @@ rule generate_report:
         ribbon_plot   = rules.run_ntsynt_viz.output.out_html,
         ribbon_plot_image = f"{VIZ_DIR}/{NTSYNT_VIZ_RIBBON_PLOT}",
         discontinuity = f"{NTSYNT_STEM}.discontinuity_reasons.tsv",
-        mash_plot     = f"{MASH_DIR}/mash_divergence_boxplot.png",
+        mash_plot     = f"{MASH_DIR}/mash_divergence_boxplot.html",
+        mash_plot_image     = f"{MASH_DIR}/mash_divergence_boxplot.png",
     output:
         html = f"{PREFIX}_ntsynt_report.html",
         pdf = f"{PREFIX}_ntsynt_report.pdf",
@@ -755,6 +758,7 @@ rule generate_report:
           --ribbon-plot-img {input.ribbon_plot_image} \
           --discontinuity {input.discontinuity} \
           --mash-plot     {input.mash_plot} \
+          --mash-plot-img {input.mash_plot_image} \
            --group         {params.group} \
            --output        {params.prefix} 
         """
