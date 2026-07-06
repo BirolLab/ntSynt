@@ -635,18 +635,18 @@ rule extract_synteny_regions:
         fasta_list = FASTA_LIST,
     output:
         done = "regions_extracted.done",
+        regions = temporary(directory("synteny_regions"))
     params:
         script  = f"{SCRIPTS}/extract_synteny_regions.py",
-        regions = f"synteny_regions",
     shell:
         r"""
         set -eux -o pipefail
-        mkdir -p {params.regions}
+        mkdir -p {output.regions}
         fastas=$(cat {input.fasta_list} | tr "\n" " ")
         python3 {params.script} \
             --synteny {input.blocks} \
             --fastas ${{fastas}} \
-            --outdir {params.regions}
+            --outdir {output.regions}
         touch {output.done}
         """
 
@@ -660,6 +660,7 @@ rule mash_regions:
         region_type = "syntenic|non_syntenic",
     input:
         done = f"regions_extracted.done",
+        input_regions = directory("synteny_regions")
     output:
         dist = f"{MASH_DIR}/{{region_type}}_dists.tsv",
     params:

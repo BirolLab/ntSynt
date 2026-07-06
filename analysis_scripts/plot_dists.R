@@ -16,8 +16,7 @@ non_syntenic <- read.table("non_syntenic_dists.tsv",    col.names = col_names)
 # Helper: strip path and suffixes to get a clean genome accession ID
 clean_name <- function(x) {
   x <- basename(x)
-  x <- sub("\\.chr\\.(syntenic|non_syntenic)\\.fa$", "", x)
-  x <- sub("_genomic\\.fna$", "", x)
+  x <- sub("\\.(syntenic|non_syntenic)\\.\\S*$", "", x)
   x
 }
 

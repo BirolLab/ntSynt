@@ -501,7 +501,7 @@ def build_report(args: argparse.Namespace) -> str:
     if args.mash_plot and os.path.exists(args.mash_plot):
         uri = encode_image(args.mash_plot)
         content = f"""
-        <figure class="figure-wrap" style="max-width: 75%;">
+        <figure class="figure-wrap" style="max-width: 55%;">
           <img src="{uri}" alt="Mash divergence distributions">
           <figcaption>
             Pairwise mash distances across full-genome, syntenic, and
