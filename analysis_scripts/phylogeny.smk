@@ -314,6 +314,7 @@ rule download_missing_mt:
                 out={params.outdir}/${{acc}}.mt.fa
                 seqtk subseq $fna <(echo $mt_gbk) > "$out"
                 echo "  Extracted MT $mt_gbk for $acc -> $out" | tee -a {log}
+                pigz $fna
             done < {params.mt_accs}
         fi
 
@@ -367,9 +368,9 @@ rule extract_mt_from_assemblies:
             {input.seq_report} \
         | tail -n +2 \
         | while IFS=$'\t' read -r acc gbk_acc; do
-            fasta=$(find {params.fasta_root}/${{acc}} -name "*.fna" 2>/dev/null | head -n1)
+            fasta=$(find {params.fasta_root}/${{acc}} -name "*.fna.gz" 2>/dev/null | head -n1)
             if [ -z "$fasta" ]; then
-                echo "  WARNING: no .fna found for $acc, skipping." | tee -a {log}
+                echo "  WARNING: no .fna.gz found for $acc, skipping." | tee -a {log}
                 continue
             fi
             out={params.outdir}/${{acc}}.mt.fa

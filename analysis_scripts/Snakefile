@@ -307,9 +307,9 @@ checkpoint index_fastas:
                 while read -r genome_file; do 
                     base=$(basename ${{genome_file}})
                     if [[ "${{base}}" == *.gz ]]; then
-                        gunzip -c "${{full_path}}" | samtools faidx -o "${{full_path}}.fai"  -
+                        gunzip -c "${{genome_file}}" | samtools faidx -o "{ASSEMBLY_DIR}/${{base}}.fai"  -
                     else
-                        samtools faidx "${{full_path}}"
+                        samtools faidx -o "{ASSEMBLY_DIR}/${{base}}.fai" "${{genome_file}}"
                     fi                
                 done < {GENOMES}
                 touch {output.done}
