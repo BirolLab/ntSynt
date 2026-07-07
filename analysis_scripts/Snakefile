@@ -545,7 +545,8 @@ rule make_tree:
         fastas = FASTA_LIST,
         name_conv = rules.finalize_name_conversion.output.format_name_conv
     output:
-        tree = f"phylogeny/tree/{PREFIX}.nwk"
+        tree = f"phylogeny/tree/{PREFIX}.nwk",
+        out_type = "phylogeny/mt/use_nuclear.flag"
     threads: workflow.cores
     params:
         mt_source = "--mt-source user-fasta" if MT_GENOMES else "",
@@ -729,6 +730,21 @@ rule plot_divergences:
 # HTML report
 # ===========================================================================
 
+def get_tree_type(wildcards, input):
+    "Return string corresponding to tree (or lack thereof) type used in ribbon plot"
+    if TREEFILE:
+        return "Provided"
+    if MAKE_TREE:
+        if MT_GENOMES:
+            return "mt"
+        with open(input.nuclear_tree_flag, 'r') as fin:
+            flag = fin.readline().strip()
+            if flag == "1":
+                return "Nuclear"
+            if flag == "0":
+                return "mt"
+    return "none"
+
 rule generate_report:
     """
     Collate pipeline outputs into a single self-contained HTML report.
@@ -742,13 +758,15 @@ rule generate_report:
         discontinuity = f"{NTSYNT_STEM}.discontinuity_reasons.tsv",
         mash_plot     = f"{MASH_DIR}/mash_divergence_boxplot.html",
         mash_plot_image     = f"{MASH_DIR}/mash_divergence_boxplot.png",
+        nuclear_tree_flag = rules.make_tree.output.out_type if MAKE_TREE else []
     output:
         html = f"{PREFIX}_ntsynt_report.html",
         pdf = f"{PREFIX}_ntsynt_report.pdf",
     params:
         script = f"{SCRIPTS}/generate_report.py",
         group  = PREFIX,
-        prefix = f"{PREFIX}_ntsynt_report"
+        prefix = f"{PREFIX}_ntsynt_report",
+        tree_type = get_tree_type
     shell:
         r"""
         python3 {params.script} \
@@ -760,5 +778,6 @@ rule generate_report:
           --mash-plot     {input.mash_plot} \
           --mash-plot-img {input.mash_plot_image} \
            --group         {params.group} \
-           --output        {params.prefix} 
+           --output        {params.prefix} \
+           --tree {params.tree_type}
         """

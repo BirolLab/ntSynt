@@ -333,7 +333,6 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     }}
 
     /* --- mash iframe --------------------------------------------------- */
-    /* Scoped entirely to #divergence — cannot affect #ribbon             */
     #divergence .figure-wrap {{
       display: block;
       width: 85%;
@@ -578,6 +577,13 @@ def build_report(args: argparse.Namespace) -> str:
     sections_html_pdf.append(section("Mash divergence distributions", content_pdf, "divergence"))
 
     # 5. Ribbon plot
+    if args.tree == "Provided":
+        tree_str = "User-provided tree included in ribbon plot."
+    elif args.tree != "none":
+        tree_str = f"{args.tree} genome tree included in ribbon plot."
+    else:
+        tree_str = ""
+
     if args.ribbon_plot and os.path.exists(args.ribbon_plot):
         with open(args.ribbon_plot, "r", encoding="utf-8") as f:
             widget_html = f.read()
@@ -587,7 +593,7 @@ def build_report(args: argparse.Namespace) -> str:
             {widget_html}
           </div>
           <figcaption>
-            ntSynt-viz ribbon plot showing synteny blocks across all assemblies.
+            ntSynt-viz ribbon plot showing synteny blocks across all assemblies. {tree_str} 
             Interactive — hover to highlight, click to pin tooltips.
             Source: {html.escape(args.ribbon_plot)}
           </figcaption>
@@ -598,7 +604,7 @@ def build_report(args: argparse.Namespace) -> str:
         <figure class="figure-wrap" style="max-width: 100%;">
           <img src="{uri}" alt="ntSynt-viz ribbon plot" style="width: 100%;">
           <figcaption>
-            ntSynt-viz ribbon plot showing synteny blocks across all assemblies.
+            ntSynt-viz ribbon plot showing synteny blocks across all assemblies. {tree_str}
             Image: {html.escape(args.ribbon_plot_img)}
           </figcaption>
         </figure>"""
@@ -713,6 +719,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--mash-plot-img",   metavar="PNG",  help="Mash divergence plot image (for PDF)")
     p.add_argument("--group",           required=True,  help="Taxonomic group name (used in title)")
     p.add_argument("--output",          required=True,  metavar="HTML", help="Output file path")
+    p.add_argument("--tree", choices=["Nuclear", "mt", "Provided", "none"], default="none", help="Phylogenetic tree type to include in report (default: none)")
     return p.parse_args()
 
 
