@@ -3,20 +3,8 @@
 generate_report.py
 
 Generate a self-contained HTML report summarising a completed ntSynt
-multi-genome synteny run.  All images are embedded as base64 and all
-tables are inlined, so the output is a single portable .html file.
+multi-genome synteny run. 
 
-Usage (standalone):
-    python generate_report.py \
-        --abyss-fac        <date>_assemblies/<group>_abyss_fac-summary.tsv \
-        --block-stats      ntsynt_run/ntSynt.k24.w1000.synteny_blocks.stats.tsv \
-        --ribbon-plot      ntsynt_run/ntsynt-viz/<group>_ribbon-plot.png \
-        --discontinuity    ntsynt_run/ntSynt.k24.w1000.discontinuity_reasons.tsv \
-        --mash-plot        mash/mash_divergence_boxplot.png \
-        --group            lucinidae \
-        --output           lucinidae_ntsynt_report.html
-
-Called by the Snakemake rule generate_report via the same arguments.
 """
 
 import argparse
@@ -24,6 +12,8 @@ import base64
 import csv
 import html
 import os
+import re
+import json
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -53,7 +43,7 @@ def format_genome_size(bp):
 
 def tsv_to_html_table(path: str, table_id: str = "", rename: dict = None) -> str:
     """Read a TSV and return an HTML <table> string.
-    
+
     Args:
         path:     Path to the TSV file.
         table_id: Optional HTML id attribute for the <table> element.
@@ -98,6 +88,34 @@ def section(title: str, content: str, section_id: str = "") -> str:
       <h2>{title}</h2>
       {content}
     </section>"""
+
+
+def mash_widget_height(widget_html: str, fallback: int = 600) -> int:
+    """Extract the browser height from the htmlwidget sizing script tag."""
+    m = re.search(
+        r'<script type="application/htmlwidget-sizing"[^>]*>(\{.*?\})</script>',
+        widget_html
+    )
+    if m:
+        try:
+            sizing = json.loads(m.group(1))
+            return int(sizing["browser"]["height"]) + 20  # small buffer
+        except (KeyError, ValueError):
+            pass
+    return fallback
+
+
+def prepare_mash_widget(widget_html: str) -> str:
+    """Inject minimal CSS so the widget fills the iframe cleanly."""
+    inner_css = """
+        <style>
+        html, body { margin: 0; padding: 0 !important; overflow-x: auto; overflow-y: hidden; }
+            div.girafe { width: 100% !important; }
+        </style>
+        """
+    if "</head>" in widget_html:
+        return widget_html.replace("</head>", inner_css + "</head>", 1)
+    return widget_html.replace("<body>", "<body>" + inner_css, 1)
 
 
 # ---------------------------------------------------------------------------
@@ -283,10 +301,10 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       border: 1px solid var(--border);
       border-radius: var(--radius);
       padding: 1.5rem;
-      display: inline-block;
+      display: block;
       max-width: 100%;
     }}
-    
+
     #ribbon .figure-wrap {{
         display: block;
         width: 100%;
@@ -309,11 +327,26 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         width: 100% !important;
         height: 100% !important;
     }}
-    
+
     .html-widget, .girafe_container {{
       height: auto !important;
     }}
 
+    /* --- mash iframe --------------------------------------------------- */
+    /* Scoped entirely to #divergence — cannot affect #ribbon             */
+    #divergence .figure-wrap {{
+      display: block;
+      width: 85%;
+      padding: 0.5rem;
+    }}
+
+    #divergence .mash-iframe {{
+      display: block;
+      width: 100%;
+      border: none;
+    }}
+
+    /* --- shared figure styles ----------------------------------------- */
     .figure-wrap img {{
       display: block;
       max-width: 100%;
@@ -389,7 +422,7 @@ def build_report(args: argparse.Namespace) -> str:
 
     sections_html = []
 
-# 1. Assembly stats (abyss-fac)
+    # 1. Assembly stats (abyss-fac)
     if args.abyss_fac and os.path.exists(args.abyss_fac):
         with open(args.abyss_fac, newline="") as fh:
             reader = csv.DictReader(fh, delimiter="\t")
@@ -398,7 +431,6 @@ def build_report(args: argparse.Namespace) -> str:
         n_count   = row["n_count"]
         chr_range = f"{row['n_min']} – {row['n_max']}"
         size_min_val, size_unit, min_divisor = format_genome_size(int(row["sum_min"]))
-
         size_range = f"{size_min_val} – {int(row['sum_max']) / min_divisor:.1f}"
 
         summary_rows = [
@@ -425,8 +457,8 @@ def build_report(args: argparse.Namespace) -> str:
     else:
         content = "<p><em>abyss-fac summary not found.</em></p>"
     sections_html.append(section("Assembly statistics", content, "assembly-stats"))
-    
-# 2. Synteny block stats
+
+    # 2. Synteny block stats
     if args.block_stats and os.path.exists(args.block_stats):
         BLOCK_STATS_COLUMNS = {
             "Number_blocks":            "Number of blocks",
@@ -446,7 +478,6 @@ def build_report(args: argparse.Namespace) -> str:
         ]
         for col, label in BLOCK_STATS_COLUMNS.items():
             raw = row.get(col, "N/A")
-            # Round to 2 decimal places if the value is a float
             try:
                 value = f"{float(raw):,.2f}" if "." in raw else f"{int(raw):,}"
             except (ValueError, TypeError):
@@ -464,7 +495,7 @@ def build_report(args: argparse.Namespace) -> str:
         content = "<p><em>Synteny block stats not found.</em></p>"
     sections_html.append(section("Synteny block statistics", content, "synteny-blocks"))
 
-# 3. Discontinuity reasons
+    # 3. Discontinuity reasons
     if args.discontinuity and os.path.exists(args.discontinuity):
         with open(args.discontinuity, newline="") as fh:
             reader = csv.DictReader(fh, delimiter="\t")
@@ -497,65 +528,104 @@ def build_report(args: argparse.Namespace) -> str:
         content = "<p><em>Discontinuity reasons TSV not found.</em></p>"
     sections_html.append(section("Reasons for synteny block discontinuities", content, "discontinuity"))
 
+    # sections 1-3 identical between HTML and PDF; split here
+    sections_html_pdf = list(sections_html)
+
     # 4. Mash divergence plot
     if args.mash_plot and os.path.exists(args.mash_plot):
-        uri = encode_image(args.mash_plot)
+        with open(args.mash_plot, "r", encoding="utf-8") as f:
+            widget_html = f.read()
+
+        # Determine iframe height from the SVG's own height attribute
+        iframe_height = mash_widget_height(widget_html)
+        widget_html = prepare_mash_widget(widget_html)
+        widget_srcdoc = html.escape(widget_html, quote=True)
+
         content = f"""
-        <figure class="figure-wrap" style="max-width: 55%;">
-          <img src="{uri}" alt="Mash divergence distributions">
+        <figure class="figure-wrap">
+          <iframe class="mash-iframe"
+                  srcdoc="{widget_srcdoc}"
+                  style="height: {iframe_height}px;"
+                  sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals allow-downloads">
+          </iframe>
           <figcaption>
             Pairwise mash distances across full-genome, syntenic, and
             non-syntenic regions. Wilcoxon signed-rank test p-value shown
             between syntenic and non-syntenic distributions.
-            Image: {args.mash_plot}
+            Interactive — hover over a point to see the genome pair.
+            Source: {html.escape(args.mash_plot)}
           </figcaption>
         </figure>"""
     else:
         content = "<p><em>Mash divergence plot not found.</em></p>"
     sections_html.append(section("Mash divergence distributions", content, "divergence"))
 
+    # PDF: static image
+    if args.mash_plot_img and os.path.exists(args.mash_plot_img):
+        uri = encode_image(args.mash_plot_img)
+        content_pdf = f"""
+        <figure class="figure-wrap" style="max-width: 55%;">
+          <img src="{uri}" alt="Mash divergence distributions">
+          <figcaption>
+            Pairwise mash distances across full-genome, syntenic, and
+            non-syntenic regions. Wilcoxon signed-rank test p-value shown
+            between syntenic and non-syntenic distributions.
+            Image: {html.escape(args.mash_plot_img)}
+          </figcaption>
+        </figure>"""
+    else:
+        content_pdf = "<p><em>Mash divergence plot image not found.</em></p>"
+    sections_html_pdf.append(section("Mash divergence distributions", content_pdf, "divergence"))
+
     # 5. Ribbon plot
-    sections_html_pdf = sections_html.copy()
     if args.ribbon_plot and os.path.exists(args.ribbon_plot):
-        # Add to sections HTML
         with open(args.ribbon_plot, "r", encoding="utf-8") as f:
             widget_html = f.read()
         content = f"""
         <figure class="figure-wrap" style="max-width: 100%;">
-        <div class="ribbon-widget">
-        {widget_html}
-        </div>
-        <figcaption>
+          <div class="ribbon-widget">
+            {widget_html}
+          </div>
+          <figcaption>
             ntSynt-viz ribbon plot showing synteny blocks across all assemblies.
             Interactive — hover to highlight, click to pin tooltips.
-            Source: {args.ribbon_plot}
-        </figcaption>
+            Source: {html.escape(args.ribbon_plot)}
+          </figcaption>
         </figure>"""
-        
-        # Add to sections HTML for PDF (static image)
+
         uri = encode_image(args.ribbon_plot_img)
         content_pdf = f"""
         <figure class="figure-wrap" style="max-width: 100%;">
           <img src="{uri}" alt="ntSynt-viz ribbon plot" style="width: 100%;">
           <figcaption>
             ntSynt-viz ribbon plot showing synteny blocks across all assemblies.
-            Image: {args.ribbon_plot_img}
+            Image: {html.escape(args.ribbon_plot_img)}
           </figcaption>
         </figure>"""
     else:
         content = "<p><em>Ribbon plot not found.</em></p>"
+        content_pdf = "<p><em>Ribbon plot not found.</em></p>"
     sections_html.append(section("Synteny ribbon plot", content, "ribbon"))
     sections_html_pdf.append(section("Synteny ribbon plot", content_pdf, "ribbon"))
 
-    return HTML_TEMPLATE.format(
-        group=html.escape(group_display),
-        date=date_str,
-        sections="\n".join(sections_html),
-        ), HTML_TEMPLATE.format(
-        group=html.escape(group_display),
-        date=date_str,
-        sections="\n".join(sections_html_pdf),
-        )   
+    return (
+        HTML_TEMPLATE.format(
+            group=html.escape(group_display),
+            date=date_str,
+            sections="\n".join(sections_html),
+        ),
+        HTML_TEMPLATE.format(
+            group=html.escape(group_display),
+            date=date_str,
+            sections="\n".join(sections_html_pdf),
+        ),
+    )
+
+
+# ---------------------------------------------------------------------------
+# PDF CSS
+# ---------------------------------------------------------------------------
+
 PDF_CSS = """
 @page {
     size: A4 portrait;
@@ -584,6 +654,7 @@ img {
 
 /* Mash divergence plot — narrower since it's a portrait-style boxplot */
 #divergence .figure-wrap {
+    display: block;
     max-width: 100%;
 }
 
@@ -607,8 +678,6 @@ img {
 #ribbon .figure-wrap img {
     width: 100%;
 }
-
-
 """
 
 
@@ -628,20 +697,22 @@ def save_pdf(html_content: str, pdf_path: str) -> None:
             file=sys.stderr,
         )
 
+
 # ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Generate a self-contained HTML report for an ntSynt run.")
-    p.add_argument("--abyss-fac",     metavar="TSV",  help="abyss-fac summary TSV")
-    p.add_argument("--block-stats",   metavar="TSV",  help="ntSynt synteny block stats TSV")
-    p.add_argument("--ribbon-plot",   metavar="HTML",  help="ntSynt-viz ribbon plot HTML")
-    p.add_argument("--ribbon-plot-img", metavar="SVG",  help="ntSynt-viz ribbon plot image (for PDF)")
-    p.add_argument("--discontinuity", metavar="TSV",  help="Block discontinuity reasons TSV")
-    p.add_argument("--mash-plot",     metavar="PNG",  help="Mash divergence boxplot PNG")
-    p.add_argument("--group",         required=True,  help="Taxonomic group name (used in title)")
-    p.add_argument("--output",        required=True,  metavar="HTML", help="Output prefix file path")
+    p.add_argument("--abyss-fac",       metavar="TSV",  help="abyss-fac summary TSV")
+    p.add_argument("--block-stats",     metavar="TSV",  help="ntSynt synteny block stats TSV")
+    p.add_argument("--ribbon-plot",     metavar="HTML", help="ntSynt-viz ribbon plot HTML (interactive)")
+    p.add_argument("--ribbon-plot-img", metavar="PNG",  help="ntSynt-viz ribbon plot image (for PDF)")
+    p.add_argument("--discontinuity",   metavar="TSV",  help="Block discontinuity reasons TSV")
+    p.add_argument("--mash-plot",       metavar="HTML", help="Mash divergence plot HTML (interactive)")
+    p.add_argument("--mash-plot-img",   metavar="PNG",  help="Mash divergence plot image (for PDF)")
+    p.add_argument("--group",           required=True,  help="Taxonomic group name (used in title)")
+    p.add_argument("--output",          required=True,  metavar="HTML", help="Output file path")
     return p.parse_args()
 
 

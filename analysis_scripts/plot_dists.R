@@ -176,7 +176,7 @@ p <- ggplot(combined, aes(x = region, y = mash_dist*100, fill = region)) +
 
   labs(x = NULL, y = "Mash distance (%)") +
 
-  theme_bw(base_size = 13) +
+  theme_bw(base_size = 18) +
   theme(legend.position = "none")
 
 # Annotate Wilcoxon p-value between Syntenic and Non-syntenic bars (positions 2 & 3)
@@ -204,7 +204,7 @@ girafe_obj <- girafe(
       "font-size:12px;",
       "white-space:pre-line;"
     )),
-    opts_sizing(rescale = TRUE)
+    opts_sizing(rescale = FALSE)
   )
 )
  
