@@ -13,7 +13,7 @@ def read_rename_tsv(rename_tsv):
     with open(rename_tsv, 'r', encoding="utf-8") as fin:
         for line in fin:
             old_name, new_name = line.strip().split('\t')
-            rename_dict[old_name] = new_name
+            rename_dict[old_name] = new_name.replace(" ", "_")
 
     return rename_dict
 

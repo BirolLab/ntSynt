@@ -591,7 +591,7 @@ rule make_mt_name_conversion:
                         asm_acc = row.get("Assembly Accession", "").strip()
                         species = acc_to_species.get(asm_acc, asm_acc)
                         if gbk_acc:
-                            out.write(f"{gbk_acc}\t{species}\n")
+                            out.write(f"{gbk_acc}\t{species.replace(" ", "_")}\n")
 
 rule rename_newick:
     input:

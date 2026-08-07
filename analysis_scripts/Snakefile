@@ -148,7 +148,7 @@ rule download_assemblies_sequence_reports:
     shell:
         r"""
         datasets summary genome accession --inputfile {input.acc_tsv} \
-            --report sequence --assembly-level chromosome,complete \
+            --report sequence \
             --as-json-lines \
         |dataformat tsv genome-seq --fields accession,chr-name,genbank-seq-acc,mol-type,role \
             > {output.seq_report}
@@ -166,7 +166,6 @@ rule download_assemblies_ncbi:
         """
         datasets download genome accession \
             --include genome \
-            --assembly-level complete,chromosome \
             --inputfile {input.accfile} \
             --filename {params.outdir}/{params.prefix}_assemblies.zip
 
@@ -511,16 +510,16 @@ rule finalize_name_conversion:
     output:
         format_name_conv = f"{PREFIX}_name_conversion.tsv"
     run:
-        if ACCESSIONS:
-            with open(input.name_conv) as infile, open(output.format_name_conv, "w") as outfile:
-                for line in infile:
-                    line = line.rstrip("\n")
-                    if not line:
-                        continue
-                    accession, new_name = line.split("\t")
-                    outfile.write(f"{accession}.chr.fa.gz\t{new_name}\n")
-        if GENOMES:
-            os.symlink(os.path.abspath(input.name_conv), output.format_name_conv)
+        with open(input.name_conv) as infile, open(output.format_name_conv, "w") as outfile:
+            for line in infile:
+                line = line.rstrip("\n")
+                if not line:
+                    continue
+                accession, new_name = line.split("\t")
+                if ACCESSIONS:
+                    outfile.write(f"{accession}.chr.fa.gz\t{new_name.replace(" ", "_")}\n")
+                else:
+                    outfile.write(f"{accession}\t{new_name.replace(" ", "_")}\n")
 
 # ===========================================================================
 # ntSynt-viz
@@ -613,7 +612,7 @@ rule run_ntsynt_viz:
                 {params.target_genome} \
                 {params.viz_format} {params.viz_width} {params.viz_dpi} \
                 {params.centromeres} {params.viz_order} {params.viz_keep} \
-                {params.no_arrow} \
+                {params.no_arrow} {params.optimize_order} \
                 &> {log}
             cd ../
             touch {output.done}

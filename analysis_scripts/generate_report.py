@@ -225,7 +225,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
     /* --- layout -------------------------------------------------------- */
     main {{
-      max-width: 1100px;
+      max-width: 1800px;
       margin: 0 auto;
       padding: 2.5rem 3rem 5rem;
     }}
@@ -316,6 +316,10 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         max-width: 100%;
         overflow-x: auto;
         display: block;
+    }}
+    
+    #ribbon .ribbon-widget .girafe.html-widget {{
+        height: auto !important;
     }}
 
     #ribbon .ribbon-widget > div {{
@@ -717,7 +721,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--discontinuity",   metavar="TSV",  help="Block discontinuity reasons TSV")
     p.add_argument("--mash-plot",       metavar="HTML", help="Mash divergence plot HTML (interactive)")
     p.add_argument("--mash-plot-img",   metavar="PNG",  help="Mash divergence plot image (for PDF)")
-    p.add_argument("--group",           required=True,  help="Taxonomic group name (used in title)")
+    p.add_argument("--group",           required=True,  help="Prefix name (used in title)")
     p.add_argument("--output",          required=True,  metavar="HTML", help="Output file path")
     p.add_argument("--tree", choices=["Nuclear", "mt", "Provided", "none"], default="none", help="Phylogenetic tree type to include in report (default: none)")
     return p.parse_args()
