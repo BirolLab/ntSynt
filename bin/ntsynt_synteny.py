@@ -454,6 +454,8 @@ class NtSyntSynteny(ntjoin.Ntjoin):
     def merge_collinear_blocks(self, blocks):
         "Merge collinear blocks that are less than threshold apart, and are not indels"
         out_blocks = []
+        if not blocks:
+            return out_blocks
         curr_block = blocks[0]
         curr_block.broken_reason = None
         for block in blocks[1:]:
