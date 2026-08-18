@@ -231,6 +231,9 @@ def build_snakemake_cmd(args: argparse.Namespace, config: dict) -> list[str]:
         "--nolock",
     ]
 
+    if args.kmc:
+        cmd += ["all", "kmc"]
+
     # One --config flag followed by all key=value pairs as separate tokens
     config_pairs = []
     for k, v in config.items():
@@ -253,9 +256,6 @@ def build_snakemake_cmd(args: argparse.Namespace, config: dict) -> list[str]:
 
     cmd += args.snakemake_args
     
-    if args.kmc:
-        cmd += ["all", "kmc"]
-
     return cmd
 
 def validate_options(args, parser):
