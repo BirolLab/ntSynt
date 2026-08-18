@@ -165,7 +165,7 @@ def main():
 
     args.w_rounds = " ".join(map(str, args.w_rounds))
     command = f"snakemake -s {base_dir}/ntsynt_run_pipeline.smk -p --cores {args.t} " \
-                f"--config references='{fastas_input}' kmer={args.k} window={args.w} threads={args.t} fpr={args.fpr} " \
+                f"--config references=\"{fastas_input}\" kmer={args.k} window={args.w} threads={args.t} fpr={args.fpr} " \
                 f"prefix={args.prefix} w_rounds='{args.w_rounds}' indel_merge={args.indel} " \
                 f"collinear_merge={args.merge} block_size={args.block_size} hashes={args.hashes} "
     command += "common=False " if args.no_common else "common=True "
