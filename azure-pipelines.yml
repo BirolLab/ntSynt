@@ -36,6 +36,16 @@ jobs:
 
   - script: |
       source activate ntsynt_ci
+      python3 -c 'import btllib'
+      echo "CONDA_PREFIX=$CONDA_PREFIX"
+      echo "CC=$CC"
+      echo "CXX=$CXX"
+      echo "CPPFLAGS=$CPPFLAGS"
+      echo "CXXFLAGS=$CXXFLAGS"
+      echo "LDFLAGS=$LDFLAGS"
+      command -v c++
+      find "$CONDA_PREFIX/etc/conda/activate.d" -maxdepth 1 -type f -print
+      conda list | grep -E '(^compilers|^cxx-compiler|^gxx_linux-64|^gxx_impl_linux-64)'
       meson setup build --prefix=$(pwd)/ntSynt_build
       cd build
       ninja install
