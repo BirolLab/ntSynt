@@ -151,6 +151,14 @@ main(int argc, const char** argv)
       genome, btllib::SeqReader::Flag::LONG_MODE, num_threads);
     #pragma omp parallel
     for (const auto record : reader) {
+      if (record.seq.length() < k) {
+        btllib::log_error(
+          "Record " + record.id + " in genome " + genome +
+          " is shorter than the k-mer size (" + std::to_string(k) +
+          "). Please ensure all input sequences are "
+          "larger than the set k, filtering the input genome file if needed.");
+        exit(1);
+      }
       btllib::NtHash nthash(record.seq, hashes, k);
       while (nthash.roll()) {
         if (bf->contains(nthash.hashes())) {

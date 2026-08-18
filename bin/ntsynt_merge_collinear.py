@@ -121,6 +121,9 @@ def merge_collinear_blocks(blocks: list[SyntenyBlock],
       '+': curr.end   = next.end    (extend rightward)
       '-': curr.start = next.start  (extend leftward)
     """
+    if not blocks:
+        return []
+
     out_blocks: list[SyntenyBlock] = []
     curr_block = blocks[0]
 

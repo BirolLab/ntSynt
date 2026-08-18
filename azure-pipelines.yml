@@ -31,11 +31,13 @@ jobs:
   - script: |
       source activate ntsynt_ci
       mamba install --yes -c bioconda -c conda-forge python=3.12
-      MAMBA_USE_SHARDED_REPODATA=OFF mamba install --yes -c bioconda -c conda-forge intervaltree pybedtools ncls 'python-igraph>=1.0.0' compilers btllib meson ninja snakemake samtools pytest seqtk pylint
+      MAMBA_USE_SHARDED_REPODATA=OFF mamba install --yes -c bioconda -c conda-forge intervaltree pybedtools ncls 'python-igraph>=1.0.0' compilers gxx_linux-64 btllib meson ninja snakemake samtools pytest seqtk pylint
     displayName: Install dependencies
 
   - script: |
       source activate ntsynt_ci
+      python3 -c 'import btllib'
+      echo "CXXFLAGS=$CXXFLAGS"
       meson setup build --prefix=$(pwd)/ntSynt_build
       cd build
       ninja install
