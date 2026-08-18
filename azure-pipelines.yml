@@ -31,7 +31,7 @@ jobs:
   - script: |
       source activate ntsynt_ci
       mamba install --yes -c bioconda -c conda-forge python=3.12
-      MAMBA_USE_SHARDED_REPODATA=OFF mamba install --yes -c bioconda -c conda-forge intervaltree pybedtools ncls 'python-igraph>=1.0.0' compilers btllib meson ninja snakemake samtools pytest seqtk pylint
+      MAMBA_USE_SHARDED_REPODATA=OFF mamba install --yes -c bioconda -c conda-forge intervaltree pybedtools ncls 'python-igraph>=1.0.0' compilers cxx-compiler btllib meson ninja snakemake samtools pytest seqtk pylint
     displayName: Install dependencies
 
   - script: |
