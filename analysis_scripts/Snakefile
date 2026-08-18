@@ -13,7 +13,7 @@ Inputs  (all set in config.yaml):
 
 Steps
 -----
-  1.  download_assemblies   – datasets download + unzip; flatten fai via samtools
+  1.  download_assemblies   – dehydrated datasets download + rehydrate; flatten fai via samtools
   2.  list_fastas           – write a text file of all discovered *.fna paths
   3.  abyss_fac             – chromosome / contig length stats
   4.  mash_sketch_full      – mash sketch of full assemblies
@@ -164,14 +164,25 @@ rule download_assemblies_ncbi:
         outdir     = ASSEMBLY_DIR,
     shell:
         """
+        # A normal `datasets download` streams the complete archive in one
+        # request, which can fail for large accession sets when the HTTP/2
+        # stream is interrupted.  The dehydrated archive contains the request
+        # manifest only; `datasets rehydrate` then fetches each data file into
+        # the extracted dataset directory and can be safely re-run.
+        mkdir -p {params.outdir}
+
         datasets download genome accession \
             --include genome \
+            --dehydrated \
             --inputfile {input.accfile} \
             --filename {params.outdir}/{params.prefix}_assemblies.zip
 
         unzip -o {params.outdir}/{params.prefix}_assemblies.zip \
               -d {params.outdir}/{params.prefix}_assemblies
         rm -f {params.outdir}/{params.prefix}_assemblies.zip
+
+        datasets rehydrate \
+            --directory {params.outdir}/{params.prefix}_assemblies
 
         # Reset timestamps on all extracted files to avoid Snakemake mtime issues
         find {params.outdir}/{params.prefix}_assemblies -exec touch {{}} \\; 
