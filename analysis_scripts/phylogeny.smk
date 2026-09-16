@@ -25,9 +25,8 @@ import shutil
 # Config aliases
 # ---------------------------------------------------------------------------
 PREFIX        = config["prefix"]
-PREFIX_LOW     = PREFIX.lower()
 ASSEMBLY_DIR = f"{PREFIX}_assemblies"
-NCBI_DATA_DIR = f"{ASSEMBLY_DIR}/{PREFIX_LOW}_assemblies/ncbi_dataset/data"
+NCBI_DATA_DIR = f"{ASSEMBLY_DIR}/{PREFIX}_assemblies/ncbi_dataset/data"
 
 SEQ_REPORT    = config["seq_report"]        # from master pipeline
 NAME_CONV     = config["name_conversion"]   # from master pipeline
@@ -364,7 +363,7 @@ rule extract_mt_from_assemblies:
         # Iterate over assemblies that have MT in the sequence report
         mlr --tsv \
             filter '$["Molecule type"] == "Mitochondrion" || $["Molecule type"] == "Mitochondrial" || $["Chromosome name"] == "MT" || $["Chromosome name"] == "MIT"' \
-            then cut -f "Assembly Accession,GenBank seq accession" \
+            then cut -f "Assembly Accession","GenBank seq accession" \
             {input.seq_report} \
         | tail -n +2 \
         | while IFS=$'\t' read -r acc gbk_acc; do
