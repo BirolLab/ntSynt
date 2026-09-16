@@ -127,6 +127,10 @@ def parse_args() -> argparse.Namespace:
     opt.add_argument("--optimize-ordering", action="store_true",
                     help="Optimize tree-guided genome sorting using inversions. "
                     "Only use with strictly bifurcating trees.")
+    opt.add_argument("--haplotypes", type=str, default=None, metavar="haplotypes.tsv",
+                    help="Optional TSV file listing haplotype information for each genome. If --genomes "
+                    "is used, each row should be the two NEW assembly names (based on name conversion), separated by a tab. If --accessions is used, "
+                    "each row should be the two accessions, separated by a tab. This will be used to nudge genomes that are haplotypes together")
     
     # ------------------------------------------------------------------
     # Snakemake execution options
@@ -186,6 +190,7 @@ def build_config(args: argparse.Namespace) -> dict:
         "viz_keep":      " ".join(args.keep) if args.keep else "",
         "no_arrow":      args.no_arrow,
         "optimize_ordering": args.optimize_ordering if args.optimize_ordering else "",
+        "haplotypes":    args.haplotypes if args.haplotypes else "",
     }
 
 

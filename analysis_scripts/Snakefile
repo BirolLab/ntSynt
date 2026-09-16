@@ -64,6 +64,7 @@ VIZ_KEEP      = config.get("viz_keep") or ""
 NO_ARROW      = config.get("no_arrow", False)
 NTSYNT_VIZ_RIBBON_ADJUST = config.get("ntsynt_viz_ribbon_adjust", 0.2)
 VIZ_OPTIMIZE_ORDERING = config.get("optimize_ordering") or ""
+HAPLOTYPES = config.get("haplotypes") or ""
 
 NTSYNT_VIZ_RIBBON_PLOT = (
     f"{PREFIX}_ribbon-plot_tree.{VIZ_FORMAT}" if MAKE_TREE or TREEFILE
@@ -158,17 +159,15 @@ rule download_assemblies_ncbi:
     input:
         accfile = ACCESSIONS,
     output:
-        done    = f"{ASSEMBLY_DIR}/download.done",
+        done = f"{ASSEMBLY_DIR}/{PREFIX}_download.done",
     params:
         prefix = PREFIX,
-        outdir     = ASSEMBLY_DIR,
+        outdir = ASSEMBLY_DIR,
+    retries: 3
     shell:
         """
-        # A normal `datasets download` streams the complete archive in one
-        # request, which can fail for large accession sets when the HTTP/2
-        # stream is interrupted.  The dehydrated archive contains the request
-        # manifest only; `datasets rehydrate` then fetches each data file into
-        # the extracted dataset directory and can be safely re-run.
+        set -euxo pipefail
+
         mkdir -p {params.outdir}
 
         datasets download genome accession \
@@ -181,12 +180,41 @@ rule download_assemblies_ncbi:
               -d {params.outdir}/{params.prefix}_assemblies
         rm -f {params.outdir}/{params.prefix}_assemblies.zip
 
-        datasets rehydrate \
-            --directory {params.outdir}/{params.prefix}_assemblies
+        touch {output.done}
+        """
 
-        # Reset timestamps on all extracted files to avoid Snakemake mtime issues
-        find {params.outdir}/{params.prefix}_assemblies -exec touch {{}} \\; 
+rule rehydrate_assemblies_ncbi:
+    input:
+        done = f"{ASSEMBLY_DIR}/{PREFIX}_download.done",
+    output:
+        done = f"{ASSEMBLY_DIR}/download.done",
+    params:
+        prefix = PREFIX,
+        outdir = ASSEMBLY_DIR,
+    retries: 3
+    shell:
+        """
+        set -euxo pipefail
 
+        cd {params.outdir}/{params.prefix}_assemblies
+
+        # Purge any files left over from a prior attempt that fail checksum,
+        # so rehydrate treats them as missing and re-fetches them instead of
+        # trusting a truncated download.
+        if [ -f md5sum.txt ]; then
+            md5sum -c md5sum.txt 2>&1 | grep -v ': OK$' | sed 's/: .*//' | xargs -r rm -f || true
+        fi
+
+        cd ../ 
+
+        datasets rehydrate --directory ./{params.prefix}_assemblies
+
+        # Fail loudly (and trigger another retry) if anything is still bad.
+        cd {params.prefix}_assemblies && md5sum -c md5sum.txt
+
+        cd ../..
+
+        find {params.outdir}/{params.prefix}_assemblies -exec touch {{}} \;
         touch {output.done}
         """
 
@@ -533,6 +561,37 @@ rule finalize_name_conversion:
                     outfile.write(f"{accession}\t{new_name.replace(" ", "_")}\n")
 
 # ===========================================================================
+# Prepare haplotypes TSV, if specified
+# ===========================================================================
+rule finalize_haplotypes:
+    input:
+        haplotypes = HAPLOTYPES,
+        name_conv = NAME_CONVERSIONS
+    output:
+        format_haplotypes = f"{PREFIX}_haplotypes-info.tsv"
+    run:
+        accession_name_conv = {}
+        if ACCESSIONS:
+            with open(input.name_conv) as infile:
+                for line in infile:
+                    line = line.strip().split("\t")
+                    if not line:
+                        continue
+                    accession, new_name = line
+                    accession_name_conv[accession] = new_name.replace(" ", "_")
+        with open(input.haplotypes) as infile, open(output.format_haplotypes, 'w') as outfile:
+            for line in infile:
+                line = line.strip().split("\t")
+                if not line:
+                    continue
+                asm1, asm2 = line
+                if ACCESSIONS:
+                    outfile.write(f"{accession_name_conv[asm1]}\t{accession_name_conv[asm2]}\n")
+                else:
+                    outfile.write(f"{asm1.replace(" ", "_")}\t{asm2.replace(" ", "_")}\n")
+                    
+        
+# ===========================================================================
 # ntSynt-viz
 # ===========================================================================
 
@@ -571,6 +630,7 @@ rule run_ntsynt_viz:
         name_conv = rules.finalize_name_conversion.output.format_name_conv,
         done      = f"{ASSEMBLY_DIR}/index_fastas.done",
         treefile = get_treefile,
+        haplotypes = rules.finalize_haplotypes.output.format_haplotypes if HAPLOTYPES else []
     output:
         links = f"{VIZ_DIR}/{PREFIX}.sequence_lengths.sorted.tsv",
         done = f"{VIZ_DIR}/ntsynt_viz.done",
@@ -595,6 +655,7 @@ rule run_ntsynt_viz:
         viz_keep      = f"--keep {VIZ_KEEP}" if VIZ_KEEP else "",
         no_arrow      = "--no-arrow" if NO_ARROW else "",
         optimize_order = "--optimize-ordering" if VIZ_OPTIMIZE_ORDERING else "",
+        haplotypes    = lambda wildcards, input: (f"--haplotypes ../{input.haplotypes}" if HAPLOTYPES else ""),
     run:
         shell(
             """
@@ -623,7 +684,7 @@ rule run_ntsynt_viz:
                 {params.target_genome} \
                 {params.viz_format} {params.viz_width} {params.viz_dpi} \
                 {params.centromeres} {params.viz_order} {params.viz_keep} \
-                {params.no_arrow} {params.optimize_order} \
+                {params.no_arrow} {params.optimize_order} {params.haplotypes} \
                 &> {log}
             cd ../
             touch {output.done}
