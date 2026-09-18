@@ -21,9 +21,21 @@ args <- parser$parse_args()
 
 col_names <- c("query", "reference", "mash_dist", "p_value", "matching_hashes")
 
-full_genome  <- read.table(args$full, col.names = col_names)
-syntenic     <- read.table(args$syntenic,        col.names = col_names)
-non_syntenic <- read.table(args$non_syntenic,    col.names = col_names)
+# Read a Mash TSV, returning an empty (correctly-typed) data frame if the file is empty
+read_mash_tsv <- function(path) {
+  if (file.info(path)$size == 0) {
+    return(setNames(
+      data.frame(character(), character(), numeric(), numeric(), character(),
+                 stringsAsFactors = FALSE),
+      col_names
+    ))
+  }
+  read.table(path, col.names = col_names)
+}
+
+full_genome  <- read_mash_tsv(args$full)
+syntenic     <- read_mash_tsv(args$syntenic)
+non_syntenic <- read_mash_tsv(args$non_syntenic)
 
 # Name conversion TSV: old basename -> new (human-readable) genome name.
 # Adjust the path below if the file lives somewhere other than the mash/ dir.
@@ -40,6 +52,7 @@ name_map <- setNames(gsub("_", " ", name_conversion$new), name_conversion$old)
 # Anything not found in the lookup is left as-is (with a warning) so the
 # script doesn't silently drop data if the conversion table is incomplete.
 translate_name <- function(x) {
+  if (length(x) == 0) return(character(0))
   translated <- unname(name_map[x])
   missing <- x[is.na(translated)]
   if (length(missing) > 0) {
@@ -86,9 +99,9 @@ non_syntenic <- make_pair_id(non_syntenic)
 # Combine into a single long data frame
 # ---------------------------------------------------------------------------
 
-full_genome$region  <- "Full genome"
-syntenic$region     <- "Syntenic"
-non_syntenic$region <- "Non-syntenic"
+full_genome$region  <- rep("Full genome", nrow(full_genome))
+syntenic$region     <- rep("Syntenic", nrow(syntenic))
+non_syntenic$region <- rep("Non-syntenic", nrow(non_syntenic))
 
 combined <- bind_rows(full_genome, syntenic, non_syntenic) %>%
   select(pair_id, region, mash_dist)
@@ -103,6 +116,11 @@ combined$region <- factor(combined$region,
 paired <- bind_rows(syntenic, non_syntenic) %>%
   select(pair_id, region, mash_dist) %>%
   pivot_wider(names_from = region, values_from = mash_dist)
+
+# Ensure both columns exist even if one input was empty
+for (col in c("Syntenic", "Non-syntenic")) {
+  if (!col %in% names(paired)) paired[[col]] <- NA_real_
+}
 
 # Only pairs with both measurements present can be used
 complete_pairs <- paired %>%

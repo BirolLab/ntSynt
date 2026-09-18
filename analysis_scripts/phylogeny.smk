@@ -346,7 +346,7 @@ rule extract_mt_from_assemblies:
         f"{MT_DIR}/embedded/extract_mt.log",
     shell:
         r"""
-        set -euxo pipefail
+        set -exo pipefail
         mkdir -p {params.outdir}
 
         nuclear_flag=$(cat {input.nuclear_fallback})

@@ -741,13 +741,13 @@ rule mash_regions:
     threads: workflow.cores
     shell:
         r"""
-        set -euo pipefail
+        set -uo pipefail
         mkdir -p {MASH_DIR}
 
         # Build a temporary file list for this region type
         fa_list=$(ls {params.regions}/*.{wildcards.region_type}.fa)
         echo ${{fa_list}}
-        mash triangle -p {threads} -s {params.sketch_size} -E ${{fa_list}} > {output.dist}
+        mash triangle -p {threads} -s {params.sketch_size} -E ${{fa_list}} > {output.dist} || touch {output.dist}
         """
 
 
