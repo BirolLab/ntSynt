@@ -544,6 +544,10 @@ class NtSyntSynteny(ntjoin.Ntjoin):
                             continue
                         outfile.write(block.get_block_string(block_num, verbose=True))
                         block_num += 1
+                    if block_num == 0:
+                        # No blocks were output, print error and exit with status 1
+                        print("Error - no synteny blocks detected. Try adjusting the specified k/w parameters.")
+                        sys.exit(1)
 
             prev_w = new_w
 
