@@ -91,6 +91,12 @@ def parse_args() -> argparse.Namespace:
                      ))
     opt.add_argument("--tree", default="", metavar="NEWICK",
                      help="Optional Newick tree file for ntSynt-viz. Omit to skip.")
+    opt.add_argument("--keep-incomplete", required=False, action="store_true",
+                     help=(
+                        "When --accessions is specified, by default the pipeline will skip analyzing any accessions "
+                        "which appear incomplete (ie. there are unlocalized-scaffold entries with no assembled-molecule counterpart). "
+                        "Use this option to still use these assemblies in the downstream analysis."
+                    ))
 
     # ntSynt
     opt.add_argument("--hashes", type=int, default=None,
@@ -104,7 +110,7 @@ def parse_args() -> argparse.Namespace:
     opt.add_argument("--scale", help="Length of scale bar in bases for ntSynt-viz", type=float,
                      default=100e6)
     opt.add_argument("--seq_length", help="Minimum sequence length for ntSynt-viz", type=int)
-    opt.add_argument("--ntsynt-viz_ribbon-adjust", type=float, default=0.2,
+    opt.add_argument("--ntsynt-viz_ribbon-adjust", default="auto",
                      help="Adjustment factor for ntSynt-viz ribbons. Increase if ribbon plot labels are cut off.")
     opt.add_argument("--target-genome", default="", metavar="NAME",
                     help="Target genome for ntSynt-viz (placed at top, ribbons coloured by its chromosomes).")
@@ -191,6 +197,7 @@ def build_config(args: argparse.Namespace) -> dict:
         "no_arrow":      args.no_arrow,
         "optimize_ordering": args.optimize_ordering if args.optimize_ordering else "",
         "haplotypes":    args.haplotypes if args.haplotypes else "",
+        "keep_incomplete":  args.keep_incomplete if args.keep_incomplete else "",
     }
 
 

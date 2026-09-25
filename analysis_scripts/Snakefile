@@ -65,6 +65,7 @@ NO_ARROW      = config.get("no_arrow", False)
 NTSYNT_VIZ_RIBBON_ADJUST = config.get("ntsynt_viz_ribbon_adjust", 0.2)
 VIZ_OPTIMIZE_ORDERING = config.get("optimize_ordering") or ""
 HAPLOTYPES = config.get("haplotypes") or ""
+KEEP_INCOMPLETE_ASSEMBLIES = config.get("keep_incomplete", False)
 
 NTSYNT_VIZ_RIBBON_PLOT = (
     f"{PREFIX}_ribbon-plot_tree.{VIZ_FORMAT}" if MAKE_TREE or TREEFILE
@@ -218,16 +219,20 @@ rule rehydrate_assemblies_ncbi:
         touch {output.done}
         """
 
-# ===========================================================================
-# Filter downloaded assemblies to retain chromosome sequences only
-# ===========================================================================
-
 rule filter_assemblies_to_chromosomes:
     """
     For each downloaded assembly, filter the sequence report to
     assembled-molecule chromosomes, then extract those sequences
     with seqtk subseq into <accession>.chr.fa.gz alongside the original *.fna.
     Also writes a per-accession <accession>.chromosomes.tsv for reference.
+
+    Accessions where a chromosome name (other than "Un") appears as an
+    unlocalized-scaffold but is never also seen as an assembled-molecule
+    are flagged as incompletely assembled. By default these are skipped
+    entirely, since naive assembled-molecule-only filtering would make
+    the genome look erroneously small/incomplete. Set
+    config["keep_incomplete_assemblies"] = True to keep them anyway
+    (a warning is still logged).
     """
     input:
         accfile    = ACCESSIONS,
@@ -236,7 +241,8 @@ rule filter_assemblies_to_chromosomes:
     output:
         done = f"{ASSEMBLY_DIR}/filter_chromosomes.done",
     params:
-        fasta_root = f"{ASSEMBLY_DIR}/{PREFIX}_assemblies/ncbi_dataset/data",
+        fasta_root      = f"{ASSEMBLY_DIR}/{PREFIX}_assemblies/ncbi_dataset/data",
+        keep_incomplete = "1" if KEEP_INCOMPLETE_ASSEMBLIES else "0",
     log:
         f"{ASSEMBLY_DIR}/filter_chromosomes.log",
     shell:
@@ -271,6 +277,45 @@ rule filter_assemblies_to_chromosomes:
                 echo "  WARNING: no chromosome sequences found for $accession, skipping." \
                     | tee -a {log}
                 continue
+            fi
+
+            # ------------------------------------------------------------------
+            # Sanity check: flag chromosomes that only exist as unlocalized
+            # scaffolds (never as an assembled-molecule). This indicates the
+            # assembly could be incompletely assembled for that chromosome.
+            # ------------------------------------------------------------------
+            unloc_tsv={params.fasta_root}/${{accession}}/${{accession}}.unlocalized.tsv
+            mlr --tsv \
+                filter -s my_acc="$accession" '$["Assembly Accession"] == @my_acc' \
+                then filter '$Role == "unlocalized-scaffold" && $["Molecule type"] == "Chromosome" && $["Chromosome name"] != "Un"' \
+                {input.seq_report} > "$unloc_tsv"
+
+            n_unloc=$(tail -n +2 "$unloc_tsv" | wc -l)
+            n_missing=0
+
+            if [ "${{n_unloc}}" -gt 0 ]; then
+                missing_tsv={params.fasta_root}/${{accession}}/${{accession}}.missing_chromosomes.tsv
+                # Unpaired *right* records: unlocalized-scaffold chr names
+                # with no matching assembled-molecule chr name in $chr_tsv
+                mlr --tsv join -j "Chromosome name" -f "$chr_tsv" --ur --np "$unloc_tsv" \
+                    > "$missing_tsv"
+
+                n_missing=$(tail -n +2 "$missing_tsv" 2>/dev/null | wc -l)
+
+                if [ "${{n_missing}}" -gt 0 ]; then
+                    echo "  WARNING: $accession has ${{n_missing}} chromosome(s) present only as" \
+                         " unlocalized-scaffold (never as assembled-molecule):" | tee -a {log}
+                    cut -f1 "$missing_tsv" | tail -n +2 | tee -a {log}
+
+                    if [ "{params.keep_incomplete}" != "1" ]; then
+                        echo "  Treating $accession as incompletely assembled; skipping." \
+                            | tee -a {log}
+                        continue
+                    else
+                        echo "  keep_incomplete_assemblies is set; keeping $accession despite" \
+                             " incomplete chromosome assembly." | tee -a {log}
+                    fi
+                fi
             fi
 
             # Extract chromosome sequences using seqtk subseq
