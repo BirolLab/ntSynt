@@ -107,10 +107,10 @@ def main() -> None:
         (calculate_ng50(get_lengths(list_block), sum(get_lengths(list_block))) \
             for _, list_block in block_lengths.items()))/num_genomes
 
-    print("Number_blocks","Number_blocks_all_asm",  "Average_coverage", "Average_coverage_all_asm",
+    print("Number_genomes", "Number_blocks","Number_blocks_all_asm",  "Average_coverage", "Average_coverage_all_asm",
           "Coverage_min_genome_size", "Average_length", "Median_length", "Total_length",
           "NG50_length", "N50_length", sep="\t")
-    print(f"{int(num_blocks)}\t{int(num_blocks_all_asm)}\t{avg_coverage}\t{avg_coverage_all}\t"\
+    print(f"{num_genomes}\t{int(num_blocks)}\t{int(num_blocks_all_asm)}\t{avg_coverage}\t{avg_coverage_all}\t"\
         f"{coverage_min_genome_size}\t{average_block_length}\t{median_block_length}\t{total_length}\t"\
         f"{int(average_ng50)}\t{int(average_n50)}")
 
